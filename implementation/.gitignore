@@ -1,0 +1,11 @@
+checkpoint/*
+102flowers/*
+cub_birds_200_2011/*
+samples/main*
+backup/
+*.txt
+*.pdf
+*.pyc
+.DS_Store
+._*
+train_txt2im_wrong_image.py
