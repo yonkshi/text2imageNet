@@ -61,7 +61,7 @@ class DataLoader():
                 with open(txt_fpath, 'r') as txt_file:
                     lines = txt_file.readlines()
                     lines = [l.rstrip() for l in lines]
-                txt = list(map(encode_text, lines))
+                txt = list(map(self.encode_text, lines))
 
                 ret_q.put((cls, resized_im, txt))
                 q.task_done()
@@ -95,7 +95,6 @@ class DataLoader():
 
         self.data = data
 
-
     def _shuffle_idx(self):
         """
         Adds more shuffled index into queue
@@ -106,14 +105,21 @@ class DataLoader():
         self.sh_idx += idx.tolist()
 
     def _encode_text(self, txt):
-        l = list(map(c2i, txt))
+        l = list(map(self.c2i, txt))
         l += [0] * (conf.CHAR_DEPTH - len(l))
         return l
 
     def _c2i(self, c: str):
         return conf.ALPHABET.find(c)
 
-    def next_batch(self):
+    def next_batch(self): #TODO modify to comply with TF pipeline?
+        '''
+        Get batches of data
+        :return:
+        '''
+        if self.data is None:
+            raise Exception('Data not preprocessed! Did you call .process_data() beforehand? ')
+
         batch = []
         if len(self.sh_idx) < conf.BATCH_SIZE:
             self._shuffle_idx()
@@ -196,27 +202,3 @@ def resize_image_with_smallest_side(image, small_size=224):
 
     return im
 
-def load_and_process_captions(): # TODO add batch support
-    """
-    Loads captions and preprocess them into 1 hot encoding
-    :param bathces:
-    :return:
-    """
-    # Test string
-    test_strings = ["this is a bird", 'this is another bird'] * 20
-    return list(map(encode_text, test_strings)) # maps multiple
-
-def encode_text(txt):
-    l = list(map(c2i, txt))
-    l += [0] * (conf.CHAR_DEPTH - len(l))
-    return l
-
-def c2i(c:str):
-    return conf.ALPHABET.find(c)
-
-dd = DataLoader()
-dd.process_data()
-np.random.seed(100)
-for i in range(100):
-    b = dd.next_batch()
-    print('yo')
