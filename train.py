@@ -20,7 +20,6 @@ def main():
     img = load_and_process_image_batch()
     txt_seq = load_and_process_captions()
 
-
     encoded_captions = tf.one_hot(t_caption,
                                   on_value=1.,
                                   off_value=0.,

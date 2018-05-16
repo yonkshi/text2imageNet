@@ -20,11 +20,11 @@ def load_and_process_image_batch(): # TODO add batch support
 
     images.append(resized_im)
 
-    im = imread('assets/training/result.png', mode='RGB') # First time for batch
+    im = imread('assets/training/4.png', mode='RGB') # First time for batch
     resized_im = resize_image_with_smallest_side(im)
     images.append(resized_im)
-
-    return images
+    npim = np.array(images)
+    return npim
 
 def load_and_process_captions(): # TODO add batch support
     """
