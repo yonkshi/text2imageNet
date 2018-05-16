@@ -35,6 +35,10 @@ def crop_and_flip(image, size = 224):
         images.append(im_lowerright)
         images.append(np.flilr(im_lowerright))
 
+        im_middle = image[(h-l)/2:(h+l)/2, (w-l)/2:(w+l)/2, :]
+        images.append(im_middle)
+        images.append(np.fliplr(im_middle))
+
     shuffle(images)
 
     return images
