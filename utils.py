@@ -4,7 +4,7 @@ from scipy.ndimage import imread
 from random import shuffle
 
 
-def crop_and_flip(image, size = 224):
+def crop_and_flip(image):
 
     """
 
