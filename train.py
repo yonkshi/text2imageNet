@@ -2,6 +2,7 @@ from models import *
 from lenet.pretrained import generated_lenet
 from dataloader import *
 import conf
+import tensorflow as tf
 
 batch_size = 40
 def main():
