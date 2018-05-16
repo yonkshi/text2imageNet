@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.idea
 *.t7
+assets/
 
 # C extensions
 *.so

@@ -8,12 +8,12 @@ import numpy as np
 import scipy.misc
 import argparse
 
-from tensorcv.dataflow.image import ImageFromFile
+from lenet.tensorcv.dataflow.image import ImageFromFile
 
-import example.setup_env as conf
-from lib.nets.googlenet import GoogleNet
-from lib.utils.preprocess import resize_image_with_smallest_side, center_crop_image
-from lib.utils.classes import get_word_list
+import lenet.example.setup_env as conf
+from lenet.lib.nets.googlenet import GoogleNet
+from lenet.lib.utils.preprocess import resize_image_with_smallest_side, center_crop_image
+from lenet.lib.utils.classes import get_word_list
 
 
 def display_data(dataflow, data_name):
@@ -43,9 +43,9 @@ if __name__ == '__main__':
     test_data = ImageFromFile(FLAGS.type,
                               data_dir=conf.DATA_DIR,
                               num_channel=3)
-    display_data(test_data, 'test_data')
+    #display_data(test_data, 'test_data')
 
-    word_dict = get_word_list('data/imageNetLabel.txt')
+    #word_dict = get_word_list('data/imageNetLabel.txt')
 
     model.create_model([image, 1])
     test_op = tf.nn.top_k(tf.nn.softmax(model.layer['output']),
