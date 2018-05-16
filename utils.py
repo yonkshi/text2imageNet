@@ -25,7 +25,7 @@ def crop_and_flip(image):
 
         im_upperright = image[:l, w-l:, :]
         images.append(im_upperright)
-        images.append(np.fliplr(im_lowerright))
+        images.append(np.fliplr(im_upperright))
 
         im_lowerleft = image[h-l:, :l, :]
         images.append(im_lowerleft)
@@ -33,9 +33,9 @@ def crop_and_flip(image):
 
         im_lowerright = image[h-l:, w-l:, :]
         images.append(im_lowerright)
-        images.append(np.flilr(im_lowerright))
+        images.append(np.fliplr(im_lowerright))
 
-        im_middle = image[(h-l)/2:(h+l)/2, (w-l)/2:(w+l)/2, :]
+        im_middle = image[(h - l) // 2:(h + l) // 2, (w - l) // 2:(w + l) // 2, :]
         images.append(im_middle)
         images.append(np.fliplr(im_middle))
 
@@ -89,5 +89,7 @@ def resize_image_with_smallest_side(image, small_size=224):
     return im
 
 
-image = imread('implementation/result.png', mode='RGB')
+#image = imread('implementation/result.png', mode='RGB')
+testimage = np.random.normal(0, 1, (751, 500, 3))
+images = crop_and_flip(testimage)
 a = 0
