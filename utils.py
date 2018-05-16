@@ -93,7 +93,7 @@ def resize_image_with_smallest_side(image, small_size=224):
 image = imread('implementation/result.png', mode='RGB')
 plt.imshow(image)
 plt.show()
-images=crop_and_flip(image,224)
+images=crop_and_flip(image)
 for image in images:
     plt.imshow(image)
     plt.show()
