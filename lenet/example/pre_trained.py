@@ -62,8 +62,8 @@ if __name__ == '__main__':
         for k in range(0, 50):
             if test_data.epochs_completed < 1:
                 batch_data = test_data.next_batch()
-                im = batch_data[0]
-                im = resize_image_with_smallest_side(im, 224)
+                im2 = batch_data[0]
+                im = resize_image_with_smallest_side(im2, 224)
                 # im = center_crop_image(im, 224, 224)
                 # scipy.misc.imsave('{}test_{}.png'.format(conf.SAVE_DIR, k),
                 #                   np.squeeze(im))
