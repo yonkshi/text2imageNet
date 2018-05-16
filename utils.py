@@ -16,7 +16,7 @@ def crop_and_flip(image,os):
 
     h, w, c = image.shape
 
-    scales = (256, 384, 480)
+    scales = [256]
 
     images = []
     for l in scales:
@@ -95,7 +95,8 @@ def resize_image_with_smallest_side(image, small_size=224):
 
 
 output_size=224
-image = imread('implementation/result.png', mode='RGB')
+#image = imread('implementation/result.png', mode='RGB')
+image = imread('assets/image_00001.jpg', mode='RGB')
 plt.imshow(image)
 plt.show()
 images=crop_and_flip(image,output_size)
