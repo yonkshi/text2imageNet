@@ -5,7 +5,7 @@ from random import shuffle
 import matplotlib.pyplot as plt
 
 
-def crop_and_flip(image):
+def crop_and_flip(image,os):
 
     """
 
@@ -20,23 +20,27 @@ def crop_and_flip(image):
 
     images = []
     for l in scales:
-        im_upperleft = image[:l, :l, :]
+
+        im=resize_image_with_smallest_side(image,l)
+        h, w, c = im.shape
+
+        im_upperleft = im[:os, :os, :]
         images.append(im_upperleft)
         images.append(np.fliplr(im_upperleft))
 
-        im_upperright = image[:l, w-l:, :]
+        im_upperright = im[:os, w-os:, :]
         images.append(im_upperright)
         images.append(np.fliplr(im_upperright))
 
-        im_lowerleft = image[h-l:, :l, :]
+        im_lowerleft = im[h-os:, :os, :]
         images.append(im_lowerleft)
         images.append(np.fliplr(im_lowerleft))
 
-        im_lowerright = image[h-l:, w-l:, :]
+        im_lowerright = im[h-os:, w-os:, :]
         images.append(im_lowerright)
         images.append(np.fliplr(im_lowerright))
 
-        im_middle = image[(h-l)/2:(h+l)/2, (w-l)/2:(w+l)/2, :]
+        im_middle = im[(h - os) // 2:(h + os) // 2, (w - os) // 2:(w + os) // 2, :]
         images.append(im_middle)
         images.append(np.fliplr(im_middle))
 
@@ -90,10 +94,12 @@ def resize_image_with_smallest_side(image, small_size=224):
     return im
 
 
+output_size=224
 image = imread('implementation/result.png', mode='RGB')
 plt.imshow(image)
 plt.show()
-images=crop_and_flip(image)
+images=crop_and_flip(image,output_size)
 for image in images:
     plt.imshow(image)
     plt.show()
+
