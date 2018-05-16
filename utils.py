@@ -2,6 +2,7 @@ import numpy as np
 from scipy import misc
 from scipy.ndimage import imread
 from random import shuffle
+import matplotlib.pyplot as plt
 
 
 def crop_and_flip(image, size = 224):
@@ -25,7 +26,7 @@ def crop_and_flip(image, size = 224):
 
         im_upperright = image[:l, w-l:, :]
         images.append(im_upperright)
-        images.append(np.fliplr(im_lowerright))
+        images.append(np.fliplr(im_upperright))
 
         im_lowerleft = image[h-l:, :l, :]
         images.append(im_lowerleft)
@@ -33,7 +34,7 @@ def crop_and_flip(image, size = 224):
 
         im_lowerright = image[h-l:, w-l:, :]
         images.append(im_lowerright)
-        images.append(np.flilr(im_lowerright))
+        images.append(np.fliplr(im_lowerright))
 
     shuffle(images)
 
@@ -86,4 +87,9 @@ def resize_image_with_smallest_side(image, small_size=224):
 
 
 image = imread('implementation/result.png', mode='RGB')
-a = 0
+plt.imshow(image)
+plt.show()
+images=crop_and_flip(image,224)
+for image in images:
+    plt.imshow(image)
+    plt.show()
