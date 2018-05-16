@@ -5,7 +5,7 @@ from random import shuffle
 import matplotlib.pyplot as plt
 
 
-def crop_and_flip(image, size = 224):
+def crop_and_flip(image):
 
     """
 
@@ -35,6 +35,10 @@ def crop_and_flip(image, size = 224):
         im_lowerright = image[h-l:, w-l:, :]
         images.append(im_lowerright)
         images.append(np.fliplr(im_lowerright))
+
+        im_middle = image[(h-l)/2:(h+l)/2, (w-l)/2:(w+l)/2, :]
+        images.append(im_middle)
+        images.append(np.fliplr(im_middle))
 
     shuffle(images)
 
