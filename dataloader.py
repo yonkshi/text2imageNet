@@ -79,7 +79,7 @@ class DataLoader():
             for img_name in image_names:
                 in_q.put((cls, img_name))
 
-            if i > conf.BATCH_SIZE+1: break # TODO Delete me
+            #if i > conf.BATCH_SIZE+1: break # TODO Delete me
 
         # Spawn threads
         for i in range(conf.PRE_PROCESSING_THREADS):
