@@ -64,10 +64,10 @@ def main():
 
             # Calculate the loss
             summary, loss_out, encoded_text, encoded_image = sess.run([merged, loss, txt_encoder, lenet_encoded],
-                                                             feed_dict={t_caption: txt_seq, lenet_image: img})
+                                                             feed_dict=dict)
 
             # write to the tensorboard summary
-            writer.add_summary(summary)
+            writer.add_summary(summary, update)
 
             print(loss_out)
 
