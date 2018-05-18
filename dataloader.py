@@ -29,7 +29,7 @@ class DataLoader():
 
         for class_str in listdir(self.caption_path):
             if 'class' not in class_str: continue # garbage
-            c = int(class_str.split('_')[1])
+            c = int(class_str.split('_')[1])-1  # 0 indexed
 
             text_path = join(self.caption_path, class_str)
 
@@ -46,59 +46,61 @@ class DataLoader():
     def process_data(self):
         t0 = time()
         print('pre processing data')
-        test_set_idx = sorted(loadmat('assets/encoder_train/test_set_idx.mat')['tstid'][0,:])
-        #test_count = 0
+        indices = loadmat('assets/encoder_train/test_set_idx.mat')
+        test_set_idx = sorted(loadmat('assets/encoder_train/test_set_idx.mat')['trnid'][0,:])
+
         # worker thread
         def work(q: Queue, ret_q: Queue):
             while not q.empty():
                 cls, img_name = q.get()
                 if q.qsize() % 100 == 0: print('remaining', q.qsize())
 
-                img_fpath = join(self.image_path, img_name + '.jpg')
-                im = imread(img_fpath, mode='RGB') # First time for batch
-                resized_images = crop_and_flip(im)
+                # Split test set
+                img_id = int(img_name.split('_')[1])
+                i = bisect.bisect_left(test_set_idx, img_id)
+
+                is_test_set = False
+                if i != len(test_set_idx) and test_set_idx[i] == img_id:
+                    is_test_set = True
+                    del test_set_idx[i]
 
                 # Load captions for image
-                # TODO what to do with multiple captions per text?
-                cls_dir = 'class_%05d' % cls
+                cls_dir = 'class_%05d' % (cls+1)
                 txt_fpath = join(self.caption_path, cls_dir, img_name + '.txt')
                 with open(txt_fpath, 'r') as txt_file:
                     lines = txt_file.readlines()
                     lines = [l.rstrip() for l in lines]
                 txt = list(map(self._onehot_encode_text, lines))
 
-
-                # Split test set
-                img_id = int(img_name.split('_')[1])
-
-                i = bisect.bisect_left(test_set_idx, img_id)
-
-                is_test_set = False
-                lenn = len(test_set_idx)
-                if i != len(test_set_idx) and test_set_idx[i] == img_id:
-                    is_test_set = True
-
-                    del test_set_idx[i]
+                # Load images
+                img_fpath = join(self.image_path, img_name + '.jpg')
+                im = imread(img_fpath, mode='RGB') # First time for batch
+                resized_images = crop_and_flip(im, crop_just_one=is_test_set)
 
 
-                for img in resized_images:
-                    for caption in txt:
-                        ret_q.put((cls, img, caption, is_test_set))
+                if is_test_set:
+                    # only 1 image per class
+                    ret_q.put((cls, resized_images[0], txt, is_test_set))
+
+                else:
+                    for img in resized_images:
+                        for caption in txt:
+                            ret_q.put((cls, img, caption, is_test_set))
                 q.task_done()
 
         threads = []
         data = {}
-        test_data = {}
+
         in_q = Queue()
         out_q = Queue()
 
         # Fill worker queue
-        for i, (cls, image_names) in enumerate(self.meta_data.items()):
 
+        for i, (cls, image_names) in enumerate(self.meta_data.items()):
             for img_name in image_names:
                 in_q.put((cls, img_name))
 
-            #if i > conf.BATCH_SIZE+1: break # TODO Delete me
+            #if i > 2: break # TODO Delete me
 
         # Spawn threads
         for i in range(conf.PRE_PROCESSING_THREADS):
@@ -109,21 +111,37 @@ class DataLoader():
         # Blocking for worker threads
         in_q.join()
         print('workers completed')
+        test_count = 0
+        data_count = 0
+
+        test_images = []
+        test_labels = []
+        test_captions = {}
         while not out_q.empty():
             cls, image, captions, belongs_to_testset = out_q.get()
             if belongs_to_testset:
-                if cls not in test_data:
-                    test_data[cls] = []
-                test_data[cls].append((image, captions))
+                if cls not in test_captions:
+                    test_captions[cls] = []
+
+                test_count += 1
+                test_images.append(image)
+                test_labels.append(cls)
+                test_captions[cls].extend(captions)
             else:
                 if cls not in data:
                     data[cls] = []
+                data_count += 1
                 data[cls].append((image, captions))
 
         print('pre processing complete, time:', time() - t0)
 
         self.data = data
-        self.test_data = test_data
+
+        # Convert labels to relative labels
+        mapped = list(sorted(test_captions.keys()))
+        self.test_labels = list(map(mapped.index,test_labels))
+        self.test_images = test_images
+        self.test_captions = test_captions
 
     def _shuffle_idx(self):
         """
@@ -246,7 +264,7 @@ def resize_image_with_smallest_side(image, small_size=224):
 
     return im
 
-def crop_and_flip(image,os=224):
+def crop_and_flip(image,os=224, crop_just_one=False):
 
     """
     :param image: An image on tensor form, h x w x 3
@@ -264,25 +282,28 @@ def crop_and_flip(image,os=224):
         im=resize_image_with_smallest_side(image,l)
         h, w, c = im.shape
 
-        im_upperleft = im[:os, :os, :]
-        images.append(im_upperleft)
-        images.append(np.fliplr(im_upperleft))
+        if not crop_just_one:
+            im_upperleft = im[:os, :os, :]
+            images.append(im_upperleft)
+            images.append(np.fliplr(im_upperleft))
 
-        im_upperright = im[:os, w-os:, :]
-        images.append(im_upperright)
-        images.append(np.fliplr(im_upperright))
+            im_upperright = im[:os, w-os:, :]
+            images.append(im_upperright)
+            images.append(np.fliplr(im_upperright))
 
-        im_lowerleft = im[h-os:, :os, :]
-        images.append(im_lowerleft)
-        images.append(np.fliplr(im_lowerleft))
+            im_lowerleft = im[h-os:, :os, :]
+            images.append(im_lowerleft)
+            images.append(np.fliplr(im_lowerleft))
 
-        im_lowerright = im[h-os:, w-os:, :]
-        images.append(im_lowerright)
-        images.append(np.fliplr(im_lowerright))
+            im_lowerright = im[h-os:, w-os:, :]
+            images.append(im_lowerright)
+            images.append(np.fliplr(im_lowerright))
 
+        # crop middle
         im_middle = im[(h - os) // 2:(h + os) // 2, (w - os) // 2:(w + os) // 2, :]
         images.append(im_middle)
-        images.append(np.fliplr(im_middle))
+        if not crop_just_one:
+            images.append(np.fliplr(im_middle))
 
     #shuffle(images)
 
