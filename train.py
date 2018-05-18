@@ -66,6 +66,9 @@ def main():
             summary, loss_out, encoded_text, encoded_image = sess.run([merged, loss, txt_encoder, lenet_encoded],
                                                              feed_dict=dict)
 
+            print(encoded_text)
+            print(encoded_image)
+
             # write to the tensorboard summary
             writer.add_summary(summary, update)
 
