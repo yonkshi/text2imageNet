@@ -58,11 +58,9 @@ def main():
 
             # Get a mini-batch
             captions, img, txt_seq = data.next_batch()
-            plt.imshow(img[0])
-            plt.show()
-
 
             dict = {t_caption: txt_seq, lenet_image: img}
+
             # Update parameters
             sess.run(encode_opt, feed_dict=dict)
 
@@ -70,8 +68,6 @@ def main():
             summary, loss_out, encoded_text, encoded_image = sess.run([merged, loss, txt_encoder, lenet_encoded],
                                                              feed_dict=dict)
 
-            print('encoded text:', encoded_text)
-            print('encoded image:', encoded_image)
 
             # write to the tensorboard summary
             writer.add_summary(summary, update)
@@ -93,9 +89,12 @@ def encoder_loss(V, T):
     ########## TF vectorized ##########
     with tf.variable_scope('Loss'):
 
+        n = tf.shape(V)[0]
+
         score = tf.matmul(V, tf.matrix_transpose(T))
-        thresh = tf.nn.relu(score - tf.diag(score) + 1)
-        loss = tf.reduce_mean(thresh)
+        diag = tf.diag_part(score)
+        temp = tf.nn.relu(score - tf.reshape(diag, [-1, 1]) + 1 - tf.eye(n))
+        loss = tf.reduce_mean(temp)
 
         return loss
 
