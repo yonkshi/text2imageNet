@@ -4,12 +4,14 @@ from threading import Thread
 import numpy as np
 from scipy import misc
 from scipy.ndimage import imread
+from scipy.io import loadmat
 import scipy
 import conf
 from os import listdir
 from os.path import isfile, join
 import os
 from time import time
+import bisect
 
 class DataLoader():
     def __init__(self):
@@ -44,6 +46,8 @@ class DataLoader():
     def process_data(self):
         t0 = time()
         print('pre processing data')
+        test_set_idx = sorted(loadmat('assets/encoder_train/test_set_idx.mat')['tstid'][0,:])
+        #test_count = 0
         # worker thread
         def work(q: Queue, ret_q: Queue):
             while not q.empty():
@@ -63,13 +67,28 @@ class DataLoader():
                     lines = [l.rstrip() for l in lines]
                 txt = list(map(self._onehot_encode_text, lines))
 
+
+                # Split test set
+                img_id = int(img_name.split('_')[1])
+
+                i = bisect.bisect_left(test_set_idx, img_id)
+
+                is_test_set = False
+                lenn = len(test_set_idx)
+                if i != len(test_set_idx) and test_set_idx[i] == img_id:
+                    is_test_set = True
+
+                    del test_set_idx[i]
+
+
                 for img in resized_images:
                     for caption in txt:
-                        ret_q.put((cls, img, caption))
+                        ret_q.put((cls, img, caption, is_test_set))
                 q.task_done()
 
         threads = []
         data = {}
+        test_data = {}
         in_q = Queue()
         out_q = Queue()
 
@@ -89,15 +108,22 @@ class DataLoader():
 
         # Blocking for worker threads
         in_q.join()
+        print('workers completed')
         while not out_q.empty():
-            cls, image, captions = out_q.get()
-            if cls not in data:
-                data[cls] = []
-            data[cls].append((image, captions))
+            cls, image, captions, belongs_to_testset = out_q.get()
+            if belongs_to_testset:
+                if cls not in test_data:
+                    test_data[cls] = []
+                test_data[cls].append((image, captions))
+            else:
+                if cls not in data:
+                    data[cls] = []
+                data[cls].append((image, captions))
 
         print('pre processing complete, time:', time() - t0)
 
         self.data = data
+        self.test_data = test_data
 
     def _shuffle_idx(self):
         """
