@@ -1,6 +1,7 @@
 from models import *
 from lenet.pretrained import generated_lenet
 from dataloader import *
+import matplotlib.pyplot as plt
 import conf
 import tensorflow as tf
 
@@ -57,6 +58,9 @@ def main():
 
             # Get a mini-batch
             captions, img, txt_seq = data.next_batch()
+            plt.imshow(img[0])
+            plt.show()
+
 
             dict = {t_caption: txt_seq, lenet_image: img}
             # Update parameters
@@ -66,13 +70,15 @@ def main():
             summary, loss_out, encoded_text, encoded_image = sess.run([merged, loss, txt_encoder, lenet_encoded],
                                                              feed_dict=dict)
 
-            print(encoded_text)
-            print(encoded_image)
+            print('encoded text:', encoded_text)
+            print('encoded image:', encoded_image)
 
             # write to the tensorboard summary
             writer.add_summary(summary, update)
 
-            print(loss_out)
+            print('loss: ', loss_out)
+
+    writer.close()
 
 
 def encoder_loss(V, T):
