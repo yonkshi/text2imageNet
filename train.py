@@ -13,7 +13,9 @@ def main():
     # t_wrong_caption = tf.placeholder(dtype=tf.int64, shape=[batch_size, None], name='wrong_caption_input')
     # t_z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z_noise')
 
-
+    # Should be 300 maybe
+    epochs = 10
+    lr = 0.0007
 
     # raw input
     data = DataLoader()
@@ -23,21 +25,53 @@ def main():
     txt_encoder = build_char_cnn_rnn(t_caption)
     lenet_encoded, lenet_image, lenet_model = generated_lenet()
 
+    #lenet_out = tf.stop_gradient(lenet_encoded)
+
+    # Variables we want to train / get gradients for
+    txt_encoder_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
+
+    # Loss
+    loss = encoder_loss(lenet_encoded, txt_encoder)
+
+
+    # Gradients. # todo: clip by global norm 5?
+    grads = tf.gradients(loss, txt_encoder_vars)
+
+    # Optimizer
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=lr)
+    encode_opt = optimizer.apply_gradients(zip(grads, txt_encoder_vars))
+
     with tf.Session() as sess:
+
+        # write to the tensorboard log
+        writer = tf.summary.FileWriter('./graphs', sess.graph)
+
         sess.run(tf.global_variables_initializer())
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
 
-        for i in range(1000):
-            captions, img, txt_seq = data.next_batch()
-            encoded_text = sess.run(txt_encoder, feed_dict={t_caption: txt_seq})
-            encoded_image = sess.run(lenet_encoded, feed_dict={lenet_image: img})
 
+        for update in range(epochs):
+
+            # Get a mini-batch
+            captions, img, txt_seq = data.next_batch()
+
+            dict = {t_caption: txt_seq, lenet_image: img}
+            # Update parameters
+            sess.run(encode_opt, feed_dict=dict)
+
+            # Calculate the loss
+            loss_out, encoded_text, encoded_image = sess.run([loss, txt_encoder, lenet_encoded],
+                                                             feed_dict={t_caption: txt_seq, lenet_image: img})
+
+            #encoded_image = sess.run(lenet_encoded, feed_dict={lenet_image: img})
+
+            print(loss_out)
 
         coord.request_stop()
         coord.join(threads)
 
-def loss(V, T):
+def encoder_loss(V, T):
 
     """
     Inputs come as a minibatch, disjoint classes!
@@ -47,12 +81,13 @@ def loss(V, T):
     """
 
     ########## TF vectorized ##########
+    with tf.variable_scope('Loss'):
 
-    score = tf.matmul(V, tf.matrix_transpose(T))
-    thresh = tf.nn.relu(score - tf.diag(score) + 1)
-    loss = tf.reduce_mean(thresh)
+        score = tf.matmul(V, tf.matrix_transpose(T))
+        thresh = tf.nn.relu(score - tf.diag(score) + 1)
+        loss = tf.reduce_mean(thresh)
 
-    return loss
+        return loss
 
 
 # # batch size and dimensionality
