@@ -5,6 +5,7 @@ __pycache__/
 *.idea
 *.t7
 assets/
+graphs/
 
 # C extensions
 *.so
