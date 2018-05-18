@@ -63,7 +63,7 @@ def main():
             sess.run(encode_opt, feed_dict=dict)
 
             # Calculate the loss
-            vrs, grads, summary, loss_out, encoded_text, encoded_image = sess.run([txt_encoder_vars, grads, merged, loss, txt_encoder, lenet_encoded],
+            summary, loss_out, encoded_text, encoded_image = sess.run([merged, loss, txt_encoder, lenet_encoded],
                                                              feed_dict={t_caption: txt_seq, lenet_image: img})
 
             # write to the tensorboard summary
