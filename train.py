@@ -4,11 +4,10 @@ from dataloader import *
 import conf
 import tensorflow as tf
 
-batch_size = 40
 def main():
 
     ###======================== DEFIINE MODEL ===================================###
-    t_caption = tf.placeholder('int32', [batch_size, conf.CHAR_DEPTH], name = 'caption_input')
+    t_caption = tf.placeholder('float32', [conf.BATCH_SIZE, conf.CHAR_DEPTH, conf.ALPHA_SIZE], name = 'caption_input')
     # t_wrong_image = tf.placeholder('float32', [batch_size ,image_size, image_size, 3], name = 'wrong_image')
     # t_real_caption = tf.placeholder(dtype=tf.int64, shape=[batch_size, None], name='real_caption_input')
     # t_wrong_caption = tf.placeholder(dtype=tf.int64, shape=[batch_size, None], name='wrong_caption_input')
@@ -17,21 +16,26 @@ def main():
 
 
     # raw input
-    img = load_and_process_image_batch()
-    txt_seq = load_and_process_captions()
+    data = DataLoader()
+    data.process_data()
 
-    encoded_captions = tf.one_hot(t_caption,
-                                  on_value=1.,
-                                  off_value=0.,
-                                  depth=conf.ALPHA_SIZE, axis=2)
-    txt_encoder = build_char_cnn_rnn(encoded_captions)
+    # Setting up Queue
+    txt_encoder = build_char_cnn_rnn(t_caption)
     lenet_encoded, lenet_image, lenet_model = generated_lenet()
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        encoded_image = sess.run(lenet_encoded, feed_dict={lenet_image: img})
-        encoded_text = sess.run(txt_encoder, feed_dict={t_caption: txt_seq})
-        print(encoded_text)
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+
+        for i in range(1000):
+            captions, img, txt_seq = data.next_batch()
+            encoded_text = sess.run(txt_encoder, feed_dict={t_caption: txt_seq})
+            encoded_image = sess.run(lenet_encoded, feed_dict={lenet_image: img})
+
+
+        coord.request_stop()
+        coord.join(threads)
 
 def loss(V, T):
 

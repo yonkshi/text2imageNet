@@ -52,7 +52,7 @@ class DataLoader():
 
                 img_fpath = join(self.image_path, img_name + '.jpg')
                 im = imread(img_fpath, mode='RGB') # First time for batch
-                resized_im = resize_image_with_smallest_side(im)
+                resized_images = crop_and_flip(im)
 
                 # Load captions for image
                 # TODO what to do with multiple captions per text?
@@ -61,9 +61,11 @@ class DataLoader():
                 with open(txt_fpath, 'r') as txt_file:
                     lines = txt_file.readlines()
                     lines = [l.rstrip() for l in lines]
-                txt = list(map(self.encode_text, lines))
+                txt = list(map(self._onehot_encode_text, lines))
 
-                ret_q.put((cls, resized_im, txt))
+                for img in resized_images:
+                    for caption in txt:
+                        ret_q.put((cls, img, caption))
                 q.task_done()
 
         threads = []
@@ -73,9 +75,11 @@ class DataLoader():
 
         # Fill worker queue
         for i, (cls, image_names) in enumerate(self.meta_data.items()):
-            if i > 41: break # TODO Delete me
+
             for img_name in image_names:
                 in_q.put((cls, img_name))
+
+            if i > conf.BATCH_SIZE+1: break # TODO Delete me
 
         # Spawn threads
         for i in range(conf.PRE_PROCESSING_THREADS):
@@ -104,10 +108,19 @@ class DataLoader():
         np.random.shuffle(idx)
         self.sh_idx += idx.tolist()
 
-    def _encode_text(self, txt):
-        l = list(map(self.c2i, txt))
-        l += [0] * (conf.CHAR_DEPTH - len(l))
-        return l
+    def _onehot_encode_text(self, txt):
+        axis1 = conf.ALPHA_SIZE
+        axis0 = conf.CHAR_DEPTH
+        oh = np.zeros((axis0, axis1))
+        for i, c in enumerate(txt):
+            if i >= conf.CHAR_DEPTH:
+                break # Truncate long text
+            char_i = conf.ALPHABET.find(c)
+            oh[i, char_i] = 1
+
+        # l = list(map(self._c2i, txt))
+        # l += [0] * (conf.CHAR_DEPTH - len(l)) # padding
+        return oh
 
     def _c2i(self, c: str):
         return conf.ALPHABET.find(c)
@@ -121,6 +134,9 @@ class DataLoader():
             raise Exception('Data not preprocessed! Did you call .process_data() beforehand? ')
 
         batch = []
+        classes = []
+        images = []
+        captions = []
         if len(self.sh_idx) < conf.BATCH_SIZE:
             self._shuffle_idx()
 
@@ -128,13 +144,15 @@ class DataLoader():
             cls = self.sh_idx.pop()
             d = self.data[cls]
             sample_idx = np.random.randint(0, len(d))
-            print(sample_idx)
-            img, captions = self.data[cls][sample_idx]
+            img, caption = self.data[cls][sample_idx]
+
+            #append
+            images.append(img)
+            captions.append(caption)
+            classes.append(cls)
 
 
-            batch.append((cls, img, captions))
-
-        return batch
+        return (classes, images, captions)
 
 
 
@@ -202,3 +220,44 @@ def resize_image_with_smallest_side(image, small_size=224):
 
     return im
 
+def crop_and_flip(image,os=224):
+
+    """
+    :param image: An image on tensor form, h x w x 3
+    :param size: output
+    :return:
+    """
+
+    h, w, c = image.shape
+
+    scales = [256]
+
+    images = []
+    for l in scales:
+
+        im=resize_image_with_smallest_side(image,l)
+        h, w, c = im.shape
+
+        im_upperleft = im[:os, :os, :]
+        images.append(im_upperleft)
+        images.append(np.fliplr(im_upperleft))
+
+        im_upperright = im[:os, w-os:, :]
+        images.append(im_upperright)
+        images.append(np.fliplr(im_upperright))
+
+        im_lowerleft = im[h-os:, :os, :]
+        images.append(im_lowerleft)
+        images.append(np.fliplr(im_lowerleft))
+
+        im_lowerright = im[h-os:, w-os:, :]
+        images.append(im_lowerright)
+        images.append(np.fliplr(im_lowerright))
+
+        im_middle = im[(h - os) // 2:(h + os) // 2, (w - os) // 2:(w + os) // 2, :]
+        images.append(im_middle)
+        images.append(np.fliplr(im_middle))
+
+    #shuffle(images)
+
+    return images
