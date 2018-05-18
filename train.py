@@ -14,7 +14,7 @@ def main():
     # t_z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z_noise')
 
     # Should be 300 maybe
-    epochs = 10
+    epochs = 1000
     lr = 0.0007
 
     # raw input
@@ -32,6 +32,7 @@ def main():
 
     # Loss
     loss = encoder_loss(lenet_encoded, txt_encoder)
+    tf.summary.scalar('loss', loss)
 
 
     # Gradients. # todo: clip by global norm 5?
@@ -41,15 +42,16 @@ def main():
     optimizer = tf.train.RMSPropOptimizer(learning_rate=lr)
     encode_opt = optimizer.apply_gradients(zip(grads, txt_encoder_vars))
 
+
+    # Merged summaries for Tensorboard visualization
+    merged = tf.summary.merge_all()
+
+    # write to the tensorboard log
+    writer = tf.summary.FileWriter('./graphs', tf.get_default_graph())
+
     with tf.Session() as sess:
 
-        # write to the tensorboard log
-        writer = tf.summary.FileWriter('./graphs', sess.graph)
-
         sess.run(tf.global_variables_initializer())
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(coord=coord)
-
 
         for update in range(epochs):
 
@@ -61,15 +63,14 @@ def main():
             sess.run(encode_opt, feed_dict=dict)
 
             # Calculate the loss
-            loss_out, encoded_text, encoded_image = sess.run([loss, txt_encoder, lenet_encoded],
+            vrs, grads, summary, loss_out, encoded_text, encoded_image = sess.run([txt_encoder_vars, grads, merged, loss, txt_encoder, lenet_encoded],
                                                              feed_dict={t_caption: txt_seq, lenet_image: img})
 
-            #encoded_image = sess.run(lenet_encoded, feed_dict={lenet_image: img})
+            # write to the tensorboard summary
+            writer.add_summary(summary)
 
             print(loss_out)
 
-        coord.request_stop()
-        coord.join(threads)
 
 def encoder_loss(V, T):
 
