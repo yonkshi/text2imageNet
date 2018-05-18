@@ -60,6 +60,7 @@ def main():
             captions, img, txt_seq = data.next_batch()
 
             dict = {t_caption: txt_seq, lenet_image: img}
+
             # Update parameters
             sess.run(encode_opt, feed_dict=dict)
 
