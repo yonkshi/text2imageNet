@@ -54,23 +54,74 @@ def generator(downscaled_text, z):
         #nt = 256
         Z = 100 # dimension of noise
         T = 1024 # dimension of text embedding
+        ngf = 128
 
         # sample noise
         #z = tf.random_normal((Z, 1))
 
         # Noise concatenated with encoded text
-        input = tf.concat([z, downscaled_text], axis = 0)
+        input = tf.concat([z, downscaled_text], axis = -1)
 
-        conv1 = tf.layers.conv2d_transpose(input, 128*8, (4, 4))
+        conv1 = tf.layers.conv2d_transpose(input, ngf * 8, kernel_size=(4, 4), padding='same')
         batch1 = tf.layers.batch_normalization(conv1)
 
-        conv2 = tf.layers.conv2d_transpose(batch1)
+        # state size: (ngf*8) x 4 x 4
+        res_in = batch1
+        with tf.variable_scope('res_1'):
+            conv = tf.layers.conv2d_transpose(res_in, ngf * 2, kernel_size =(1,1), padding='same')
+            batch = tf.layers.batch_normalization(conv)
+            act = tf.nn.relu(batch)
 
+            conv = tf.layers.conv2d_transpose(act, ngf * 2, kernel_size =(3,3), padding='same') # TODO pad 1 instead
+            batch = tf.layers.batch_normalization(conv)
+            act = tf.nn.relu(batch)
 
+            conv = tf.layers.conv2d_transpose(act, ngf * 8, kernel_size=(3,3), padding='same') # TODO pad 1 instead
+            batch = tf.layers.batch_normalization(conv)
 
-        out = 0
-        return out
+            added = batch + res_in
+            res_out = tf.nn.relu(added)
 
+        # state size: (ngf*8) x 4 x 4
+        conv2 = tf.layers.conv2d_transpose(res_out, ngf * 4, kernel_size=(4,4), strides = (2,2)) # TODO pad 1 instead
+        batch2 = tf.layers.batch_normalization(conv2)
+
+        # state size: (ngf*4) x 8 x 8
+        res_in = batch2
+        with tf.variable_scope('res_2'):
+            conv = tf.layers.conv2d_transpose(res_in, ngf, kernel_size =(1,1), padding='same')
+            batch = tf.layers.batch_normalization(conv)
+            act = tf.nn.relu(batch)
+
+            conv = tf.layers.conv2d_transpose(act, ngf, kernel_size =(3,3), padding='same') # TODO pad 1 instead
+            batch = tf.layers.batch_normalization(conv)
+            act = tf.nn.relu(batch)
+
+            conv = tf.layers.conv2d_transpose(act, ngf * 4, kernel_size=(3,3), padding='same') # TODO pad 1 instead
+            batch = tf.layers.batch_normalization(conv)
+
+            added = batch + res_in
+            res_out = tf.nn.relu(added)
+
+        # state size: (ngf*4) x 8 x 8
+        # TODO pad 1 instead
+        conv3 = tf.layers.conv2d_transpose(res_out, ngf * 2, kernel_size=(4, 4), strides = (2,2), padding='same')
+        batch3 = tf.layers.batch_normalization(conv3)
+        act3 = tf.nn.relu(batch3)
+
+        # state size: (ngf*2) x 16 x 16
+        # TODO pad 1 instead
+        conv4 = tf.layers.conv2d_transpose(act3, ngf , kernel_size=(4, 4), strides = (2,2), padding='same')
+        batch4 = tf.layers.batch_normalization(conv4)
+        act4 = tf.nn.relu(batch4)
+
+        # state size: (ngf*2) x 16 x 16
+        # TODO pad 1 instead
+        conv5 = tf.layers.conv2d_transpose(act4, 3 , kernel_size=(4, 4), strides = (2,2), padding='same')
+        batch5 = tf.layers.batch_normalization(conv5)
+        act5 = tf.nn.tanh(batch5)
+
+        return act5
 
 def discriminator(gan_image, encoded_text):
 
