@@ -20,7 +20,7 @@ def main():
     # t_z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z_noise')
 
     # Should be 300 maybe
-    epochs = 2000
+    epochs = 10
     lr = 0.0007
 
     # raw input
@@ -74,7 +74,6 @@ def main():
     with tf.Session() as sess:
 
         sess.run(tf.global_variables_initializer())
-        saver.save(sess, 'char-rnn-cnn', global_step=epochs-1)
 
         for update in range(epochs):
 
@@ -93,6 +92,9 @@ def main():
                 # write to the tensorboard summary
             writer.add_summary(summary, update)
             print('loss: ', loss_out)
+
+            if update % 1000 == 0 or update == epochs-1:
+                saver.save(sess, './text_encoder/char-rnn-cnn', global_step=update)
 
             if update % 10 == 0:
                 caption_mx = []
