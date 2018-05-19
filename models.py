@@ -35,4 +35,40 @@ def build_char_cnn_rnn(input_seqs):
     return out
 
 
+def generator(encoded_text):
+
+
+    with tf.variable_scope('generator'):
+
+        Z = 128 # dimension of noise
+        T = 1024 # dimension of text embedding
+
+        # sample noise
+        z = tf.random_normal((Z, 1))
+
+        # todo: should we compress encoded_text to 128? how?
+
+        # Noise concatenated with encoded text
+        input = tf.concat([z, encoded_text], axis = 0)
+
+
+
+        out = 0
+        return out
+
+
+def discriminator(gan_image, encoded_text):
+
+    with tf.variable_scope('discriminator'):
+
+        # something here
+
+
+        out = 0
+        return out
+
+
+
+
+
 
