@@ -1,3 +1,4 @@
+import datetime
 from models import *
 from lenet.pretrained import generated_lenet
 from dataloader import *
@@ -63,7 +64,9 @@ def main():
     # Merged summaries for Tensorboard visualization
     #accuracy_summ = tf.summary.merge_all()
     # write to the tensorboard log
-    writer = tf.summary.FileWriter('./graphs', tf.get_default_graph())
+    # Saves each run with a unique name
+    run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p")
+    writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
 
     with tf.Session() as sess:
 
