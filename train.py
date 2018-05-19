@@ -20,7 +20,7 @@ def main():
     # t_z = tf.placeholder(tf.float32, [batch_size, z_dim], name='z_noise')
 
     # Should be 300 maybe
-    epochs = 10
+    epochs = 20000
     lr = 0.0007
 
     # raw input
@@ -96,7 +96,7 @@ def main():
             if update % 1000 == 0 or update == epochs-1:
                 saver.save(sess, './text_encoder/char-rnn-cnn', global_step=update)
 
-            if update % 10 == 0:
+            if update % 100 == 0:
                 caption_mx = []
                 for sorted_key in sorted(data.test_captions.keys()):
                     captions = data.test_captions[sorted_key]
