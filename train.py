@@ -52,6 +52,9 @@ def main():
 
     txt_class_mean = tf.reduce_mean(txt_encoder, axis=0)
 
+    # to save the graph and all variables
+    saver = tf.train.Saver()
+
     # TODO TESTING ACCURAYC, MERGE BACK INTO FUNCTION
     captions_T = tf.transpose(t_accuracy_caption_mx)
     dotted = tf.matmul(lenet_encoded, captions_T)
@@ -71,6 +74,7 @@ def main():
     with tf.Session() as sess:
 
         sess.run(tf.global_variables_initializer())
+        saver.save(sess, 'char-rnn-cnn', global_step=epochs-1)
 
         for update in range(epochs):
 
@@ -100,6 +104,8 @@ def main():
                 _acc_sum, _acccuracy = sess.run([accuracy_summ, accuracy], feed_dict={t_accuracy_caption_mx: caption_mx, t_accuracy_labels:data.test_labels, lenet_image:data.test_images})
                 print('accuracy: %0.5f' % _acccuracy)
                 writer.add_summary(_acc_sum, update)
+
+
 
     writer.close()
 
