@@ -3,7 +3,9 @@ from tensorflow.contrib import rnn
 # import keras
 import numpy as np
 import conf
+
 def build_char_cnn_rnn(input_seqs):
+
     with tf.variable_scope("txt_encode"):
         cnn_dim = 256 # dont know?
         embed_dim = 1024
@@ -35,21 +37,34 @@ def build_char_cnn_rnn(input_seqs):
     return out
 
 
-def generator(encoded_text):
+def downscaler(encoded_text):
 
+    with tf.variable_scope('downscaler'):
+
+        m = 128
+        out = tf.layers.dense(encoded_text, m, activation=tf.nn.leaky_relu, name='dense')
+
+        return out
+
+
+def generator(downscaled_text, z):
 
     with tf.variable_scope('generator'):
 
-        Z = 128 # dimension of noise
+        #nt = 256
+        Z = 100 # dimension of noise
         T = 1024 # dimension of text embedding
 
         # sample noise
-        z = tf.random_normal((Z, 1))
-
-        # todo: should we compress encoded_text to 128? how?
+        #z = tf.random_normal((Z, 1))
 
         # Noise concatenated with encoded text
-        input = tf.concat([z, encoded_text], axis = 0)
+        input = tf.concat([z, downscaled_text], axis = 0)
+
+        conv1 = tf.layers.conv2d_transpose(input, 128*8, (4, 4))
+        batch1 = tf.layers.batch_normalization(conv1)
+
+        conv2 = tf.layers.conv2d_transpose(batch1)
 
 
 
