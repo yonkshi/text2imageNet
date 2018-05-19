@@ -14,6 +14,7 @@ import lenet.example.setup_env as conf
 from lenet.lib.nets.googlenet import GoogleNet
 from lenet.lib.utils.preprocess import resize_image_with_smallest_side, center_crop_image
 from lenet.lib.utils.classes import get_word_list
+import matplotlib.pyplot as plt
 
 
 def display_data(dataflow, data_name):
@@ -45,7 +46,7 @@ if __name__ == '__main__':
                               num_channel=3)
     #display_data(test_data, 'test_data')
 
-    #word_dict = get_word_list('data/imageNetLabel.txt')
+    word_dict = get_word_list('data/imageNetLabel.txt')
 
     model.create_model([image, 1])
     test_op = tf.nn.top_k(tf.nn.softmax(model.layer['output']),
@@ -63,12 +64,14 @@ if __name__ == '__main__':
             if test_data.epochs_completed < 1:
                 batch_data = test_data.next_batch()
                 im2 = batch_data[0]
+
                 im = resize_image_with_smallest_side(im2, 224)
+
                 # im = center_crop_image(im, 224, 224)
                 # scipy.misc.imsave('{}test_{}.png'.format(conf.SAVE_DIR, k),
                 #                   np.squeeze(im))
-                result = sess.run(embed_op, feed_dict={image: im})
-                for val, ind in zip(result.values, result.indices):
+                encoded, output = sess.run([embed_op, test_op], feed_dict={image: im})
+                for val, ind in zip(output.values, output.indices):
                     print('===========')
                     print(['%0.2f%%  ' % v for v in val])
                     print(word_dict[ind[0]])
