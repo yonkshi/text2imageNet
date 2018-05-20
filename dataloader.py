@@ -1,11 +1,14 @@
 from queue import Queue
 from threading import Thread
+import random
 
 import numpy as np
+import tensorflow as tf
 from scipy import misc
 from scipy.ndimage import imread
 from scipy.io import loadmat
-import scipy
+from models import build_char_cnn_rnn
+
 import conf
 from os import listdir
 from os.path import isfile, join
@@ -13,20 +16,39 @@ import os
 from time import time
 import bisect
 
-class DataLoader():
-    def __init__(self):
 
+
+
+def test_gan_pipeline():
+    print('hello world')
+    l = GanDataLoader()
+    incorrect = l.gan_loader()
+
+    with tf.Session() as sess:
+        t0 = time()
+        for i in range(10):
+            print('run')
+            _i= sess.run([incorrect])
+            print(_i)
+
+        print('time',time()-t0)
+
+
+class BaseDataLoader:
+    def __init__(self):
         self.caption_path = join(conf.ENCODER_TRAINING_PATH, 'captions')
         self.image_path = join(conf.ENCODER_TRAINING_PATH, 'images')
+        self.test_set_idx = sorted(loadmat('assets/encoder_train/test_set_idx.mat')['trnid'][0, :])
+
         self._load_meta_data()
         self.sh_idx = [] # shuffled index,
         self.data = None
 
-
     def _load_meta_data(self):
-
-        d = {}
-
+        d = {} # entire set
+        test_d = {} # test set only
+        train_d = {} # training set only
+        t0 = time()
         for class_str in listdir(self.caption_path):
             if 'class' not in class_str: continue # garbage
             c = int(class_str.split('_')[1])-1  # 0 indexed
@@ -34,14 +56,158 @@ class DataLoader():
             text_path = join(self.caption_path, class_str)
 
             images = []
+            test_set_images = []
+            train_set_images = []
             for txt_file in listdir(text_path):
                 if 'image' not in txt_file: continue  # garbage
                 if txt_file.endswith(".txt"):
-                    image_name = txt_file.split('.')[0]
-                    images.append(image_name)
+                    img_name = txt_file.split('.')[0]
+                    img_id = int(img_name.split('_')[1])
+                    images.append(img_name)
+
+                    # split set
+                    if img_id in self.test_set_idx:
+                        test_set_images.append(img_name)
+                    else:
+                        train_set_images.append(img_name)
             d[c] = images
 
+            if test_set_images:
+                test_d[c] = test_set_images
+            if train_set_images:
+                train_d[c] = train_set_images
+
         self.meta_data = d
+        self.testset_metadata = test_d
+        self.trainset_metadata = train_d
+        print('metadata done:', time() - t0)
+
+    def _onehot_encode_text(self, txt):
+        axis1 = conf.ALPHA_SIZE
+        axis0 = conf.CHAR_DEPTH
+        oh = np.zeros((axis0, axis1))
+        for i, c in enumerate(txt):
+            if i >= conf.CHAR_DEPTH:
+                break # Truncate long text
+            char_i = conf.ALPHABET.find(c)
+            oh[i, char_i] = 1
+
+        # l = list(map(self._c2i, txt))
+        # l += [0] * (conf.CHAR_DEPTH - len(l)) # padding
+        return oh
+
+    def _c2i(self, c: str):
+        return conf.ALPHABET.find(c)
+class GanDataLoader(BaseDataLoader):
+
+    def _incorrect_pair(self):
+        '''
+        Infinite Generator that generates a sample from incorrect pair of text and image
+        :return:
+        '''
+        random_caption_file = 'haha'
+        random_image_file = 'hoho'
+        for i in range(100):
+            # sample caption
+            caption_class = random.choice(list(self.trainset_metadata.keys()))
+            random_caption_file = random.choice(self.trainset_metadata[caption_class])
+
+            # sample images
+            rand_img_cls = random.choice(list(self.trainset_metadata.keys()))
+            random_image_file = random.choice(self.trainset_metadata[rand_img_cls])
+
+            # bad condition
+            if(random_caption_file == random_image_file): continue
+            class_dir = 'class_%05d' % (caption_class + 1) # 1 based index for class dir
+            cap_path = os.path.join(self.caption_path,class_dir, random_caption_file + '.txt')
+            img_path = os.path.join(self.image_path, random_image_file + '.jpg')
+            yield 0, cap_path, img_path
+
+    def _correct_pair(self):
+        '''
+        Randomly samples a correct pair of images from the pipeline
+        :return:
+        '''
+
+        for i in range(100):
+            # sample caption
+            random_class = random.choice(list(self.trainset_metadata.keys()))
+            random_file = random.choice(self.trainset_metadata[random_class])
+            class_dir = 'class_%05d' % (random_class + 1) # 1 based index for class dir
+            cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
+            img_path = os.path.join(self.image_path, random_file + '.jpg')
+            yield 1, cap_path, img_path
+
+    def _load_file(self, label, caption_path, image_path):
+        '''
+        File loader for the dataset pipeline
+
+        :param label: data label
+        :param caption_path: caption file
+        :param image_path: image file
+        :return:
+        '''
+
+        img_file = tf.read_file(image_path)
+        cap_file = tf.read_file(caption_path)
+
+        # Load captions for image
+        with open(caption_path, 'r') as txt_file:
+            lines = txt_file.readlines()
+        line = random.choice(lines)
+        txt = np.array(self._onehot_encode_text(line),dtype='int32')
+
+        # Load images
+        im = imread(image_path, mode='RGB')  # First time for batch
+        resized_images = crop_and_flip(im, crop_just_one=True)[0]
+
+
+        return label, txt, resized_images
+
+    def _run_encoder(self, label, caption, image):
+        encoded_caption = build_char_cnn_rnn(caption)
+        return label, encoded_caption, image
+
+    def gan_loader(self):
+
+        # TODO modify pipeline
+        source_cls = []
+        source_imgname = []
+        for cls, img_names in self.trainset_metadata.items():
+            source_cls += [cls] * len(img_names)
+            source_imgname += img_names
+
+
+        datasource = tf.data.Dataset.from_tensor_slices((source_cls, source_imgname)).repeat()
+
+        incorrect = tf.data.Dataset.from_generator(self._incorrect_pair, (tf.int8, tf.string, tf.string)).prefetch(10)
+        correct = tf.data.Dataset.from_generator(self._correct_pair, (tf.int8, tf.string, tf.string)).prefetch(10)
+
+        #incorrect = incorrect.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file], [tf.int8, tf.int32, tf.uint8])).prefetch(100)
+        #correct = correct.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file], [tf.int8, tf.int32, tf.uint8])).prefetch(100)
+        pipe = correct.concatenate(incorrect).shuffle(100)
+
+        pipe = pipe.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file],
+                                                                   [tf.int8, tf.int32, tf.uint8]),
+                        num_parallel_calls=10
+                        ).prefetch(100)
+
+        pipe = pipe.map(self._run_encoder)
+
+
+
+        value = pipe.make_one_shot_iterator().get_next()
+
+        return value
+
+
+class DataLoader(BaseDataLoader):
+    def __init__(self):
+
+        self._load_meta_data()
+        self.sh_idx = [] # shuffled index,
+        self.data = None
+        super(DataLoader, self).__init__()
 
     def process_data(self):
         t0 = time()
@@ -152,22 +318,7 @@ class DataLoader():
         np.random.shuffle(idx)
         self.sh_idx += idx.tolist()
 
-    def _onehot_encode_text(self, txt):
-        axis1 = conf.ALPHA_SIZE
-        axis0 = conf.CHAR_DEPTH
-        oh = np.zeros((axis0, axis1))
-        for i, c in enumerate(txt):
-            if i >= conf.CHAR_DEPTH:
-                break # Truncate long text
-            char_i = conf.ALPHABET.find(c)
-            oh[i, char_i] = 1
 
-        # l = list(map(self._c2i, txt))
-        # l += [0] * (conf.CHAR_DEPTH - len(l)) # padding
-        return oh
-
-    def _c2i(self, c: str):
-        return conf.ALPHABET.find(c)
 
     def next_batch(self): #TODO modify to comply with TF pipeline?
         '''
@@ -197,8 +348,6 @@ class DataLoader():
 
 
         return (classes, images, captions)
-
-
 
 def load_and_process_image_batch(): # TODO add batch support
     """
@@ -308,3 +457,7 @@ def crop_and_flip(image,os=224, crop_just_one=False):
     #shuffle(images)
 
     return images
+
+
+if __name__ == '__main__':
+    test_gan_pipeline()
