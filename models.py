@@ -69,15 +69,15 @@ def generator(text, z):
         # state size: (ngf*8) x 4 x 4
         res_in = batch1
         with tf.variable_scope('res_1'):
-            conv = tf.layers.conv2d_transpose(res_in, ngf * 2, kernel_size =(1,1), padding='same')
+            conv = tf.layers.conv2d(res_in, ngf * 2, kernel_size =(1,1), padding='same')
             batch = tf.layers.batch_normalization(conv)
             act = tf.nn.relu(batch)
 
-            conv = tf.layers.conv2d_transpose(act, ngf * 2, kernel_size =(3,3), padding='same') # TODO pad 1 instead
+            conv = tf.layers.conv2d(act, ngf * 2, kernel_size =(3,3), padding='same') # TODO pad 1 instead
             batch = tf.layers.batch_normalization(conv)
             act = tf.nn.relu(batch)
 
-            conv = tf.layers.conv2d_transpose(act, ngf * 8, kernel_size=(3,3), padding='same') # TODO pad 1 instead
+            conv = tf.layers.conv2d(act, ngf * 8, kernel_size=(3,3), padding='same') # TODO pad 1 instead
             batch = tf.layers.batch_normalization(conv)
 
             added = batch + res_in
@@ -90,15 +90,15 @@ def generator(text, z):
         # state size: (ngf*4) x 8 x 8
         res_in = batch2
         with tf.variable_scope('res_2'):
-            conv = tf.layers.conv2d_transpose(res_in, ngf, kernel_size =(1,1), padding='same')
+            conv = tf.layers.conv2d(res_in, ngf, kernel_size =(1,1), padding='same')
             batch = tf.layers.batch_normalization(conv)
             act = tf.nn.relu(batch)
 
-            conv = tf.layers.conv2d_transpose(act, ngf, kernel_size =(3,3), padding='same') # TODO pad 1 instead
+            conv = tf.layers.conv2d(act, ngf, kernel_size =(3,3), padding='same') # TODO pad 1 instead
             batch = tf.layers.batch_normalization(conv)
             act = tf.nn.relu(batch)
 
-            conv = tf.layers.conv2d_transpose(act, ngf * 4, kernel_size=(3,3), padding='same') # TODO pad 1 instead
+            conv = tf.layers.conv2d(act, ngf * 4, kernel_size=(3,3), padding='same') # TODO pad 1 instead
             batch = tf.layers.batch_normalization(conv)
 
             added = batch + res_in
@@ -123,7 +123,80 @@ def generator(text, z):
         act5 = tf.nn.tanh(batch5)
 
         return act5, batch1
+def descriminator_resnet(gan_image, text):
+    with tf.variable_scope('descriminator'):
+        m = 128
+        ndf = conf.NUM_D_FILTER
 
+        # Text input
+        txt = tf.layers.dense(text, m,)
+        txt = tf.layers.batch_normalization(txt)
+        txt = tf.nn.leaky_relu(txt)
+        # nn.Replicate(4,3)
+        # nn.Replicate(4,4)
+        txt = tf.tile(txt, [1, 4, 4, 1])
+
+        # image imput
+        # input is (nc) x 64 x 64
+
+        img = tf.layers.conv2d(gan_image, ndf, (4,4),
+                         strides=(2,2),
+                         padding='same',
+                         activation=tf.nn.leaky_relu)
+
+        # state size: (ndf) x 32 x 32
+        img = tf.layers.conv2d(img, ndf * 2,(4, 4),
+                                     strides=(2, 2),
+                                     padding='same',)
+        img = tf.layers.batch_normalization(img)
+        img = tf.nn.leaky_relu(img)
+
+        # state size: (ndf*2) x 16 x 16
+        img = tf.layers.conv2d(img, ndf * 4, (4, 4),
+                                     strides=(2, 2),
+                                     padding='same',)
+        img = tf.layers.batch_normalization(img)
+
+        # state size: (ndf*4) x 8 x 8
+        img = tf.layers.conv2d(img, ndf * 8, (4, 4),
+                                     strides=(2, 2),
+                                     padding='same',)
+        img = tf.layers.batch_normalization(img)
+
+        with tf.variable_scope('image_residual'):
+            # state size: (ndf*8) x 4 x 4
+            res_img = tf.layers.conv2d(img, ndf * 2, (1,1))
+            res_img = tf.layers.batch_normalization(res_img)
+            res_img = tf.nn.leaky_relu(res_img)
+
+            res_img = tf.layers.conv2d(res_img, ndf * 2, (3,3))
+            res_img = tf.layers.batch_normalization(res_img)
+            res_img = tf.nn.leaky_relu(res_img)
+
+            res_img = tf.layers.conv2d_transpose(res_img, ndf * 8, (3,3))
+            res_img = tf.layers.batch_normalization(res_img)
+
+            img = tf.nn.leaky_relu(res_img + img)
+
+        # descriminator begins
+        # state size: (ndf*8 + 128) x 4 x 4
+        dnet = tf.concat([img, txt], axis=-1)
+        dnet = tf.layers.conv2d(dnet, ndf * 8, (1,1))
+        dnet = tf.layers.batch_normalization(dnet)
+        dnet = tf.nn.leaky_relu(dnet)
+
+        dnet = tf.layers.conv2d(dnet, 1, (4,4))
+        dnet = tf.nn.sigmoid(dnet)
+
+
+
+
+
+
+
+
+
+    return dnet
 
 def generator2(encoded_text, z):
 

@@ -16,14 +16,16 @@ def main():
     x = tf.ones((1, 1, 1, 128,))
     txt = tf.random_normal((1, 1, 1, 1024,))
 
-    out, test_out = generator(txt, z)
+    generator_out, test_out = generator(txt, z)
     conved2 = generator2(txt, z)
+
+    d_out = descriminator_resnet(generator_out, txt)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        out = sess.run(test_out)
+        d_out = sess.run(d_out)
         out2 = sess.run(conved2)
-        print(out.shape)
+        print(d_out.shape)
         print(out2.shape)
 
 
