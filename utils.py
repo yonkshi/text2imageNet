@@ -22,7 +22,7 @@ def normalize_images(images):
     return images
 
 
-def crop_and_flip(image,os=224, crop_just_one=False):
+def crop_and_flip(image,os=224, scales = [256],crop_just_one=False):
 
     """
     :param image: An image on tensor form, h x w x 3
@@ -32,7 +32,7 @@ def crop_and_flip(image,os=224, crop_just_one=False):
 
     h, w, c = image.shape
 
-    scales = [256]
+
 
     images = []
     for l in scales:

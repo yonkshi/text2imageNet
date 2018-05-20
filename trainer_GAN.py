@@ -32,6 +32,7 @@ def main():
     caption_generator = tf.placeholder('float32', [batch_size, 201, 70], name='text_generator')
     caption_right = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_right_text')
     caption_wrong = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_wrong_text')
+
     real_image = tf.placeholder('float32', [batch_size, 64, 64, 3], name='real_image')
     z = tf.placeholder('float32', [batch_size, 100], name='noise')
 
@@ -40,16 +41,23 @@ def main():
     #text_G = tf.placeholder('float32', [batch_size, 1024], name='text_generator')
     #text_right = tf.placeholder('float32', [batch_size, 1024], name='encoded_right_text')
     #text_wrong = tf.placeholder('float32', [batch_size, 1024], name='encoded_wrong_text')
+
+    datasource = GanDataLoader()
+    iterator, next, (label, text_right, real_image) = datasource.correct_pipe()
+    iterator_incorrect, next_incorrect, (label2, text_wrong, real_image2) = datasource.incorrect_pipe()
+    iterator_txt_G, next_txt_G = datasource.text_only_pipe()
+
+
     text_G = build_char_cnn_rnn(caption_generator)
     text_right = build_char_cnn_rnn(caption_right)
     text_wrong = build_char_cnn_rnn(caption_wrong)
 
 
     # Outputs from G and D
-    fake_image = generator(text_G, z)
+    fake_image = generator(next_txt_G, z)
     S_r = discriminator(real_image, text_right)
-    S_w = discriminator(real_image, text_wrong) # todo: maybe here take real_image2
-    S_f = discriminator(fake_image, text_G)
+    S_w = discriminator(real_image2, text_wrong) # todo: maybe here take real_image2
+    S_f = discriminator(fake_image, next_txt_G)
 
 
     # Loss functions for G and D
@@ -91,6 +99,18 @@ def main():
     with tf.Session() as sess:
 
         sess.run(tf.global_variables_initializer())
+
+        # Yonk stuff here
+
+        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
+        saver.restore(sess, 'assets/char-rnn-cnn-19999')
+
+        sess.run(iterator.initializer)
+        sess.run(iterator_incorrect.initializer)
+        sess.run(iterator_txt_G.initializer)
+
+        # end of yonk's stuff
+
         step = 0
 
         dl = DataLoader()
@@ -140,21 +160,21 @@ def main():
 
             # Sample noise, and synthesize image with generator
             z_sample = np.random.normal(0, 1, (batch_size, 100)) # apparently better to sample like this than with tf
-            G_feed = {caption_generator: caption_g, z: z_sample}
-            img_f = sess.run(fake_image, feed_dict=G_feed)
-
-
-            # Todo: make sure to put the right images. different or same?
-            # feed_dicts for the discriminator
-            feed_rr = {real_image: img_r, caption_right: caption_r}
-            feed_rw = {real_image: img_r, caption_wrong: caption_w}
-            feed_fr = {fake_image: img_f, caption_generator: caption_g} # the only thing that needs to be feed to get the G_loss
-
-            feed_dict = {**feed_rr, **feed_rw, **feed_fr, z: z_sample} # merge these dictionaries
+            # G_feed = {caption_generator: caption_g, z: z_sample}
+            # img_f = sess.run(fake_image, feed_dict=G_feed)
+            #
+            #
+            # # Todo: make sure to put the right images. different or same?
+            # # feed_dicts for the discriminator
+            # feed_rr = {real_image: img_r, caption_right: caption_r}
+            # feed_rw = {real_image: img_r, caption_wrong: caption_w}
+            # feed_fr = {fake_image: img_f, caption_generator: caption_g} # the only thing that needs to be feed to get the G_loss
+            #
+            # feed_dict = {**feed_rr, **feed_rw, **feed_fr, z: z_sample} # merge these dictionaries
 
 
             # Updates parameters in G and D
-            s_r, s_w, s_f, summary, dloss, gloss, _, _ = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt], feed_dict=feed_dict)
+            s_r, s_w, s_f, summary, dloss, gloss, _, _ = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt])
 
             #gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)
 
