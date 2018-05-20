@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 import tensorflow as tf
-tf.enable_eager_execution()
+#tf.enable_eager_execution()
 
 from models import *
 from lenet.pretrained import generated_lenet
@@ -16,12 +16,12 @@ def main():
     x = tf.ones((1, 1, 1, 128,))
     txt = tf.random_normal((1, 1, 1, 1024,))
 
-    out, test_out = generator(x, z)
+    out, test_out = generator(txt, z)
     conved2 = generator2(txt, z)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        out = sess.run(conved)
+        out = sess.run(test_out)
         out2 = sess.run(conved2)
         print(out.shape)
         print(out2.shape)
