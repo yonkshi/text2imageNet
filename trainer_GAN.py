@@ -67,6 +67,8 @@ def main():
     tf.summary.scalar('discriminator_loss', D_loss)
 
 
+
+
     # Parameters we want to train, and their gradients
     G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=gen_scope)
     D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scope)
@@ -87,6 +89,7 @@ def main():
 
     # Write to tensorboard
     merged = tf.summary.merge_all()
+    fake_img_summary_op = tf.summary.image('generator_out', fake_image * 127.5)
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
 
@@ -174,7 +177,7 @@ def main():
 
             img1, img2, b4 = sess.run([real_image, real_image2, debug_1])
 
-            s_r, s_w, s_f, summary, dloss, gloss, _, _, img_f = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt, fake_image], feed_dict={z:z_sample})
+            s_r, s_w, s_f, summary, dloss, gloss, _, _, fake_img_summary = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt, fake_img_summary_op], feed_dict={z:z_sample})
 
             #gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)
 
@@ -185,6 +188,8 @@ def main():
             print('Discriminator loss: ', dloss)
             print('Generator loss: ', gloss)
 
+            if epoch % 10 == 0:
+                writer.add_summary(fake_img_summary, epoch)
 
             if step % 1000 == 0 or epoch == epochs-1:
                 saver.save(sess, './GAN', global_step=step)
