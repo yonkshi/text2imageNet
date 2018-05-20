@@ -36,6 +36,9 @@ def main():
 
 
     # Encoded texts
+    #text_G = tf.placeholder('float32', [batch_size, 1024], name='text_generator')
+    #text_right = tf.placeholder('float32', [batch_size, 1024], name='encoded_right_text')
+    #text_wrong = tf.placeholder('float32', [batch_size, 1024], name='encoded_wrong_text')
     text_G = build_char_cnn_rnn(caption_generator)
     text_right = build_char_cnn_rnn(caption_right)
     text_wrong = build_char_cnn_rnn(caption_wrong)
@@ -49,8 +52,8 @@ def main():
 
 
     # Loss functions for G and D
-    G_loss = tf.reduce_mean(tf.log(S_f))
-    D_loss = tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2)
+    G_loss = -tf.reduce_mean(tf.log(S_f))
+    D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2)
     tf.summary.scalar('generator_loss', G_loss)
     tf.summary.scalar('discriminator_loss', D_loss)
 
@@ -90,8 +93,8 @@ def main():
         step = 0
 
         dl = DataLoader()
-        img_r = crop_and_flip(imread('assets/encoder_train/images/image_06734.jpg'),
-                                   crop_just_one=True)  # real image
+        img_r = crop_and_flip(imread('assets/encoder_train/images/image_06734.jpg'),64,
+                                   crop_just_one=True).reshape([-1, 64, 64, 3])
         f_r = open('assets/encoder_train/captions/class_00001/image_06734.txt')
         txt_right = f_r.readlines()[0].strip()
         caption_r = dl._onehot_encode_text(txt_right).reshape([batch_size, 201, 70])
@@ -101,6 +104,10 @@ def main():
         caption_w = dl._onehot_encode_text(txt_wrong).reshape([batch_size, 201, 70])
 
         caption_g = caption_r.copy()
+
+
+        # todo: give me a pipeline guru plumber yonk
+        #img_r, caption_r, caption_w, caption_g = loaddata()
 
 
         for epoch in range(epochs):
@@ -133,17 +140,16 @@ def main():
             feed_rw = {real_image: img_r, caption_wrong: caption_w}
             feed_fr = {fake_image: img_f, caption_generator: caption_g} # the only thing that needs to be feed to get the G_loss
 
-            feed_dict = {**feed_rr, **feed_rw, **feed_fr} # merge these dictionaries
+            feed_dict = {**feed_rr, **feed_rw, **feed_fr, z: z_sample} # merge these dictionaries
 
 
             # Updates parameters in G and D
-            dloss, gloss, _, _ = sess.run([D_loss, G_loss, D_opt, G_opt], feed_dict=feed_dict)
+            summary, dloss, gloss, _, _ = sess.run([merged, D_loss, G_loss, D_opt, G_opt], feed_dict=feed_dict)
 
             #gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)
 
 
             # Tensorboard stuff
-            summary = sess.run([merged])
             writer.add_summary(summary, step)
             print('Update: ', step)
             print('Discriminator loss: ', dloss)
@@ -152,6 +158,10 @@ def main():
 
             if step % 1000 == 0 or epoch == epochs-1:
                 saver.save(sess, './GAN', global_step=step)
+
+            # Uncomment to plot synthesized images
+            plt.imshow(img_f[0])
+            plt.show()
 
 
     # Close writer when done training
