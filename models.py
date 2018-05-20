@@ -61,7 +61,7 @@ def generator(text, z):
         # Noise concatenated with encoded text
 
         downscaled_text = tf.layers.dense(text, m, activation=tf.nn.leaky_relu, name='linear')
-        conc = tf.concat([z, downscaled_text], axis=-1)g
+        conc = tf.concat([z, downscaled_text], axis=-1)
         dense1 = tf.layers.dense(conc, ngf * 8 * 4 * 4, activation=tf.nn.leaky_relu)
         reshaped1 = tf.reshape(dense1, (-1, 4, 4, ngf * 8))
         batch1 = tf.layers.batch_normalization(reshaped1)
