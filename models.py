@@ -47,22 +47,22 @@ def downscaler(encoded_text):
         return out
 
 
-def generator(downscaled_text, z):
+def generator(text, z):
 
     with tf.variable_scope('generator'):
 
         #nt = 256
-        Z = 100 # dimension of noise
-        T = 1024 # dimension of text embedding
         ngf = 128
+        m = 128
 
         # sample noise
         #z = tf.random_normal((Z, 1))
 
         # Noise concatenated with encoded text
-        input = tf.concat([z, downscaled_text], axis = -1)
 
-        dense1 = tf.layers.dense(input, ngf * 8 * 4 * 4, activation=tf.nn.leaky_relu)
+        downscaled_text = tf.layers.dense(text, m, activation=tf.nn.leaky_relu, name='linear')
+        conc = tf.concat([z, downscaled_text], axis=-1)g
+        dense1 = tf.layers.dense(conc, ngf * 8 * 4 * 4, activation=tf.nn.leaky_relu)
         reshaped1 = tf.reshape(dense1, (-1, 4, 4, ngf * 8))
         batch1 = tf.layers.batch_normalization(reshaped1)
 
@@ -124,6 +124,47 @@ def generator(downscaled_text, z):
 
         return act5, batch1
 
+
+def generator2(encoded_text, z):
+
+    with tf.variable_scope('generator2'):
+        s1 = 4; s2 = 8; s3 = 16; s4 = 32; s_out = 64 # size of the sides
+        n1 = 1024; n2 = 512; n3 = 256; n4 = 128; channels = 3 # depth
+
+        m = 128
+
+        linear = tf.layers.dense(encoded_text, m, activation=tf.nn.leaky_relu, name='linear')
+
+        noisy_input = tf.concat([z, linear], axis = -1)
+
+
+        conv_input = tf.layers.dense(noisy_input, n1*s1*s1, activation=tf.nn.relu, name='dense_upscale')
+        conv_input_reshaped = tf.reshape(conv_input, [-1, s1, s1, n1])
+
+        # 4 x 4 x 1024
+        conv1 = tf.layers.conv2d_transpose(conv_input_reshaped, n2, kernel_size=(5,5), strides = (2,2), padding='same', name='conv1')
+        batch1 = tf.layers.batch_normalization(conv1, name='batch1')
+
+        # 8 x 8 x 512
+        conv2 = tf.layers.conv2d_transpose(batch1, n3, kernel_size=(5,5), strides=(2,2), padding='same', name='conv2')
+        batch2 = tf.layers.batch_normalization(conv2, name='batch2')
+
+        # 16 x 16 x 256
+        conv3 = tf.layers.conv2d_transpose(batch2, n4, kernel_size=(5,5), strides=(2,2), padding='same', name='conv3')
+        batch3 = tf.layers.batch_normalization(conv3, name='batch3')
+
+        # 32 x 32 x 128
+        conv4 = tf.layers.conv2d_transpose(batch3, channels, kernel_size=(5,5), strides=(2,2), padding='same', name='conv4')
+        batch4 = tf.layers.batch_normalization(conv4, name='batch4')
+
+        # 64 x 64 x 3
+        out = tf.nn.tanh(batch4, name='image_output')
+
+        return out
+
+
+
+
 def discriminator(gan_image, encoded_text):
 
     with tf.variable_scope('discriminator'):
@@ -133,7 +174,6 @@ def discriminator(gan_image, encoded_text):
 
         out = 0
         return out
-
 
 
 
