@@ -125,33 +125,38 @@ def generator(text, z):
         return act5, batch1
 
 
-def generator2(encoded_text, z):
+def generator2(text, z):
 
     with tf.variable_scope('generator2'):
-        s1 = 4; s2 = 8; s3 = 16; s4 = 32; s_out = 64 # size of the sides
-        n1 = 1024; n2 = 512; n3 = 256; n4 = 128; channels = 3 # depth
 
+        # side length of input to first conv layer
+        s = 4
+
+        # channel depth in different
+        n1 = 1024; n2 = 512; n3 = 256; n4 = 128; channels = 3
+
+        # Dimension of compressed text
         m = 128
 
-        linear = tf.layers.dense(encoded_text, m, activation=tf.nn.leaky_relu, name='linear')
+        linear = tf.layers.dense(text, m, activation=tf.nn.leaky_relu, name='linear')
 
         noisy_input = tf.concat([z, linear], axis = -1)
 
 
-        conv_input = tf.layers.dense(noisy_input, n1*s1*s1, activation=tf.nn.relu, name='dense_upscale')
-        conv_input_reshaped = tf.reshape(conv_input, [-1, s1, s1, n1])
+        conv_input = tf.layers.dense(noisy_input, n1*4*4, activation=tf.nn.relu, name='dense_upscale')
+        conv_input_reshaped = tf.reshape(conv_input, [-1, 4, 4, n1])
 
         # 4 x 4 x 1024
         conv1 = tf.layers.conv2d_transpose(conv_input_reshaped, n2, kernel_size=(5,5), strides = (2,2), padding='same', name='conv1')
-        batch1 = tf.layers.batch_normalization(conv1, name='batch1')
+        batch1 = tf.nn.relu(tf.layers.batch_normalization(conv1, name='batch1'))
 
         # 8 x 8 x 512
         conv2 = tf.layers.conv2d_transpose(batch1, n3, kernel_size=(5,5), strides=(2,2), padding='same', name='conv2')
-        batch2 = tf.layers.batch_normalization(conv2, name='batch2')
+        batch2 = tf.nn.relu(tf.layers.batch_normalization(conv2, name='batch2'))
 
         # 16 x 16 x 256
         conv3 = tf.layers.conv2d_transpose(batch2, n4, kernel_size=(5,5), strides=(2,2), padding='same', name='conv3')
-        batch3 = tf.layers.batch_normalization(conv3, name='batch3')
+        batch3 = tf.nn.relu(tf.layers.batch_normalization(conv3, name='batch3'))
 
         # 32 x 32 x 128
         conv4 = tf.layers.conv2d_transpose(batch3, channels, kernel_size=(5,5), strides=(2,2), padding='same', name='conv4')
@@ -165,15 +170,51 @@ def generator2(encoded_text, z):
 
 
 
-def discriminator(gan_image, encoded_text):
+def discriminator(image, text):
 
     with tf.variable_scope('discriminator'):
 
-        # something here
+        # Number of filters
+        n1 = 128; n2 = 256; n3 = 512; n4 = 1024;
 
+        # kernels and strides
+        k = (5,5); s = (2,2)
 
-        out = 0
-        return out
+        # Dimension of compressed text
+        m = 128
+
+        # 64 x 64 x 3 Going in
+        conv1 = tf.layers.conv2d(image, n1, kernel_size=k, strides=s, padding = 'same', name='conv1')
+        batch1 = tf.nn.leaky_relu(tf.layers.batch_normalization(conv1, name='batch1'))
+
+        # 32 x 32 x 128 Going in
+        conv2 = tf.layers.conv2d(batch1, n2, kernel_size=k, strides=s, padding = 'same', name='conv2')
+        batch2 = tf.nn.leaky_relu(tf.layers.batch_normalization(conv2, name='batch2'))
+
+        # 16 x 16 x 256 Going in
+        conv3 = tf.layers.conv2d(batch2, n3, kernel_size=k, strides=s, padding = 'same', name='conv3')
+        batch3 = tf.nn.leaky_relu(tf.layers.batch_normalization(conv3, name='batch3'))
+
+        # 8 x 8 x 512 Going in
+        conv4 = tf.layers.conv2d(batch3, n4, kernel_size=k, strides=s, padding = 'same', name='conv4')
+        batch4 = tf.nn.leaky_relu(tf.layers.batch_normalization(conv4, name='batch4'))
+
+        # compress text and the make into matrix. tiled is 4 x 4 x 128
+        text = tf.layers.dense(text, m)
+        tiled = tf.tile(text, [1, 4, 4, 1])
+
+        # Concatenate convoluted image and tiled version of text depthwise
+        concat = tf.concat([batch4, tiled], axis=-1)
+
+        # 4 x 4 x (1024 + 128) Going in
+        conv5 = tf.layers.conv2d(concat, n4, kernel_size=(1,1), name='conv5')
+        batch5 = tf.nn.leaky_relu(tf.layers.batch_normalization(conv5, name='batch5'))
+
+        # 4 x 4 x 1024 Going in
+        out = tf.nn.sigmoid(tf.layers.conv2d(batch5, 1, kernel_size=batch5.shape[1:3]), name='output')
+
+        # output is probability for True
+        return tf.reshape(out, [])
 
 
 
