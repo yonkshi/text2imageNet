@@ -16,15 +16,15 @@ def main():
     x = tf.ones((1, 1, 1, 128,))
     txt = tf.random_normal((1, 1, 1, 1024,))
 
-    generator_out, test_out = generator(txt, z)
+    generator_out = generator(txt, z, False)
     conved2 = generator2(txt, z)
 
-    d_out = descriminator_resnet(generator_out, txt)
+    desriminator_out = descriminator_resnet(generator_out, txt, False)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        d_out = sess.run(d_out)
-        out2 = sess.run(conved2)
+        d_out, g_out = sess.run([desriminator_out, generator_out])
+
         print(d_out.shape)
         print(out2.shape)
 
