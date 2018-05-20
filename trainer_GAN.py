@@ -5,6 +5,7 @@ from dataloader import *
 from scipy.ndimage import imread
 import matplotlib.pyplot as plt
 import conf
+from utils import *
 import tensorflow as tf
 
 
@@ -95,6 +96,15 @@ def main():
         dl = DataLoader()
         img_r = crop_and_flip(imread('assets/encoder_train/images/image_06734.jpg'),64,
                                    crop_just_one=True).reshape([-1, 64, 64, 3])
+
+        plt.imshow(img_r[0])
+        plt.title('before normalizing')
+        plt.show()
+        img_r = (img_r - 127.5)/127.5#normalize_images(img_r)
+        plt.imshow(img_r[0])
+        plt.title('normalized image')
+        plt.show()
+
         f_r = open('assets/encoder_train/captions/class_00001/image_06734.txt')
         txt_right = f_r.readlines()[0].strip()
         caption_r = dl._onehot_encode_text(txt_right).reshape([batch_size, 201, 70])
@@ -106,7 +116,7 @@ def main():
         caption_g = caption_r.copy()
 
 
-        # todo: give me a pipeline guru plumber yonk
+        # todo: give me a pipeline yonk the guru plumber
         #img_r, caption_r, caption_w, caption_g = loaddata()
 
 
@@ -144,7 +154,7 @@ def main():
 
 
             # Updates parameters in G and D
-            summary, dloss, gloss, _, _ = sess.run([merged, D_loss, G_loss, D_opt, G_opt], feed_dict=feed_dict)
+            s_r, s_w, s_f, summary, dloss, gloss, _, _ = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt], feed_dict=feed_dict)
 
             #gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)
 
@@ -160,7 +170,8 @@ def main():
                 saver.save(sess, './GAN', global_step=step)
 
             # Uncomment to plot synthesized images
-            plt.imshow(img_f[0])
+            im_plot = 0.5*img_f[0] + 0.5
+            plt.imshow(im_plot)
             plt.show()
 
 

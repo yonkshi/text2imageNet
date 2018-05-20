@@ -5,10 +5,26 @@ from random import shuffle
 import matplotlib.pyplot as plt
 
 
-def crop_and_flip(image,os):
+def normalize_images(images):
 
     """
+    Normalizing a batch of images so that they have mean (0,0) and std = 1
+    :param images: batch_size x 64 x 64 x 3
+    :return:
+    """
 
+    batch_size, s, s, c = images.shape
+    channel_mean = np.einsum('nijk -> k', images) / (batch_size * s * s)
+    ims = images - channel_mean
+    channel_sd = np.sqrt(np.einsum('nijk -> k', ims**2) / (batch_size * s * s))
+    images = ims / channel_sd
+
+    return images
+
+
+def crop_and_flip(image,os=224, crop_just_one=False):
+
+    """
     :param image: An image on tensor form, h x w x 3
     :param size: output
     :return:
@@ -24,27 +40,34 @@ def crop_and_flip(image,os):
         im=resize_image_with_smallest_side(image,l)
         h, w, c = im.shape
 
-        im_upperleft = im[:os, :os, :]
-        images.append(im_upperleft)
-        images.append(np.fliplr(im_upperleft))
-
-        im_upperright = im[:os, w-os:, :]
-        images.append(im_upperright)
-        images.append(np.fliplr(im_upperright))
-
-        im_lowerleft = im[h-os:, :os, :]
-        images.append(im_lowerleft)
-        images.append(np.fliplr(im_lowerleft))
-
-        im_lowerright = im[h-os:, w-os:, :]
-        images.append(im_lowerright)
-        images.append(np.fliplr(im_lowerright))
-
+        # crop middle
         im_middle = im[(h - os) // 2:(h + os) // 2, (w - os) // 2:(w + os) // 2, :]
-        images.append(im_middle)
-        images.append(np.fliplr(im_middle))
 
-    shuffle(images)
+        if crop_just_one:
+            return im_middle
+
+        else:
+            images.append(im_middle)
+            images.append(np.fliplr(im_middle))
+
+            im_upperleft = im[:os, :os, :]
+            images.append(im_upperleft)
+            images.append(np.fliplr(im_upperleft))
+
+            im_upperright = im[:os, w-os:, :]
+            images.append(im_upperright)
+            images.append(np.fliplr(im_upperright))
+
+            im_lowerleft = im[h-os:, :os, :]
+            images.append(im_lowerleft)
+            images.append(np.fliplr(im_lowerleft))
+
+            im_lowerright = im[h-os:, w-os:, :]
+            images.append(im_lowerright)
+            images.append(np.fliplr(im_lowerright))
+
+
+    #shuffle(images)
 
     return images
 
@@ -94,7 +117,7 @@ def resize_image_with_smallest_side(image, small_size=224):
     return im
 
 
-output_size=224
+'''output_size=224
 #image = imread('implementation/result.png', mode='RGB')
 image = imread('assets/image_00001.jpg', mode='RGB')
 plt.imshow(image)
@@ -102,5 +125,5 @@ plt.show()
 images=crop_and_flip(image,output_size)
 for image in images:
     plt.imshow(image)
-    plt.show()
+    plt.show()'''
 
