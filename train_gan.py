@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 import tensorflow as tf
-tf.enable_eager_execution()
+#tf.enable_eager_execution()
 
 from models import *
 from lenet.pretrained import generated_lenet
@@ -21,9 +21,10 @@ def main():
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        out = sess.run(conved)
+        out, test_out = sess.run([out, test_out])
         out2 = sess.run(conved2)
         print(out.shape)
+        print(test_out.shape)
         print(out2.shape)
 
 
