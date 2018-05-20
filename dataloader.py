@@ -1,6 +1,7 @@
 from queue import Queue
 from threading import Thread
 import random
+import datetime
 
 import numpy as np
 import tensorflow as tf
@@ -22,14 +23,33 @@ import bisect
 def test_gan_pipeline():
     print('hello world')
     l = GanDataLoader()
-    incorrect = l.gan_loader()
+    iterator, next, (label, encoded, img) = l.correct_pipe()
+    iterator2, next2, (label2, encoded2, img2) = l.incorrect_pipe()
 
+    run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p")
+
+
+    var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='text_encoder')
+
+    writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name)
     with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+
+        # Load pretrained model
+        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
+        saver.restore(sess, 'assets/char-rnn-cnn-19999')
+
+        sess.run(iterator.initializer)
+        sess.run(iterator2.initializer)
         t0 = time()
-        for i in range(10):
+        for i in range(1000):
             print('run')
-            _i= sess.run([incorrect])
-            print(_i)
+            _, a = sess.run([next, encoded])
+            _, b = sess.run([next2, encoded2])
+
+
+            print(tf.shape(a))
+            print(tf.shape(b))
 
         print('time',time()-t0)
 
@@ -107,7 +127,7 @@ class GanDataLoader(BaseDataLoader):
         '''
         random_caption_file = 'haha'
         random_image_file = 'hoho'
-        for i in range(100):
+        while True:
             # sample caption
             caption_class = random.choice(list(self.trainset_metadata.keys()))
             random_caption_file = random.choice(self.trainset_metadata[caption_class])
@@ -129,7 +149,7 @@ class GanDataLoader(BaseDataLoader):
         :return:
         '''
 
-        for i in range(100):
+        while True:
             # sample caption
             random_class = random.choice(list(self.trainset_metadata.keys()))
             random_file = random.choice(self.trainset_metadata[random_class])
@@ -155,59 +175,49 @@ class GanDataLoader(BaseDataLoader):
         with open(caption_path, 'r') as txt_file:
             lines = txt_file.readlines()
         line = random.choice(lines)
-        txt = np.array(self._onehot_encode_text(line),dtype='int32')
+        txt = np.array(self._onehot_encode_text(line),dtype='float32')
 
         # Load images
         im = imread(image_path, mode='RGB')  # First time for batch
-        resized_images = crop_and_flip(im, crop_just_one=True)[0]
+        resized_images = crop_and_flip(im, 64, [80], crop_just_one=True)[0] # TODO Resize
 
 
         return label, txt, resized_images
 
     def _run_encoder(self, label, caption, image):
-        encoded_caption = build_char_cnn_rnn(caption)
+        caption_rigid = tf.reshape(caption,[-1,conf.CHAR_DEPTH, conf.ALPHA_SIZE])
+        encoded_caption = build_char_cnn_rnn(caption_rigid)
         return label, encoded_caption, image
 
-    def gan_loader(self):
-
-        # TODO modify pipeline
-        source_cls = []
-        source_imgname = []
-        for cls, img_names in self.trainset_metadata.items():
-            source_cls += [cls] * len(img_names)
-            source_imgname += img_names
-
-
-        datasource = tf.data.Dataset.from_tensor_slices((source_cls, source_imgname)).repeat()
-
-        incorrect = tf.data.Dataset.from_generator(self._incorrect_pair, (tf.int8, tf.string, tf.string)).prefetch(10)
-        correct = tf.data.Dataset.from_generator(self._correct_pair, (tf.int8, tf.string, tf.string)).prefetch(10)
-
-        #incorrect = incorrect.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file], [tf.int8, tf.int32, tf.uint8])).prefetch(100)
-        #correct = correct.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file], [tf.int8, tf.int32, tf.uint8])).prefetch(100)
-        pipe = correct.concatenate(incorrect).shuffle(100)
-
-        pipe = pipe.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file],
-                                                                   [tf.int8, tf.int32, tf.uint8]),
-                        num_parallel_calls=10
-                        ).prefetch(100)
-
+    def base_pipe(self, pipe_in):
+        pipe = pipe_in.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file],
+                                                                   [tf.int8, tf.float32, tf.uint8]),num_parallel_calls=10)
+        pipe = pipe.prefetch(100)
+        pipe = pipe.batch(conf.GAN_BATCH_SIZE)
         pipe = pipe.map(self._run_encoder)
 
+        pipe_iter = pipe.make_initializable_iterator()
+        pipe_next = pipe_iter.get_next()
+        return pipe_iter, pipe_next
+    def correct_pipe(self):
 
+        correct = tf.data.Dataset.from_generator(self._correct_pair, (tf.int8, tf.string, tf.string))
+        correct_iterator, correct_next = self.base_pipe(correct)
+        (label, encoded_txt, img) = correct_next
+        return correct_iterator, correct_next, (label, encoded_txt, img)
 
-        value = pipe.make_one_shot_iterator().get_next()
-
-        return value
-
+    def incorrect_pipe(self):
+        incorrect = tf.data.Dataset.from_generator(self._incorrect_pair, (tf.int8, tf.string, tf.string))
+        incorrect_iterator, incorrect_next = self.base_pipe(incorrect)
+        (label, encoded_txt, img) = incorrect_next
+        return incorrect_iterator, incorrect_next, (label, encoded_txt, img)
 
 class DataLoader(BaseDataLoader):
     def __init__(self):
-
-        self._load_meta_data()
+        super(DataLoader, self).__init__()
         self.sh_idx = [] # shuffled index,
         self.data = None
-        super(DataLoader, self).__init__()
+
 
     def process_data(self):
         t0 = time()
@@ -244,7 +254,7 @@ class DataLoader(BaseDataLoader):
                 resized_images = crop_and_flip(im, crop_just_one=is_test_set)
 
 
-                if is_test_set:
+                if is_test_set and txt:
                     # only 1 image per class
                     ret_q.put((cls, resized_images[0], txt, is_test_set))
 
@@ -266,7 +276,7 @@ class DataLoader(BaseDataLoader):
             for img_name in image_names:
                 in_q.put((cls, img_name))
 
-            #if i > 2: break # TODO Delete me
+            #if i > 5: break # TODO Delete me
 
         # Spawn threads
         for i in range(conf.PRE_PROCESSING_THREADS):
@@ -283,9 +293,13 @@ class DataLoader(BaseDataLoader):
         test_images = []
         test_labels = []
         test_captions = {}
+
+
         while not out_q.empty():
             cls, image, captions, belongs_to_testset = out_q.get()
             if belongs_to_testset:
+                #if test_count > 100: continue # TODO Delete me, this is to limit test set for testing purpose
+
                 if cls not in test_captions:
                     test_captions[cls] = []
 
@@ -413,7 +427,7 @@ def resize_image_with_smallest_side(image, small_size=224):
 
     return im
 
-def crop_and_flip(image,os=224, crop_just_one=False):
+def crop_and_flip(image,os=224, scales = [256], crop_just_one=False):
 
     """
     :param image: An image on tensor form, h x w x 3
@@ -423,7 +437,7 @@ def crop_and_flip(image,os=224, crop_just_one=False):
 
     h, w, c = image.shape
 
-    scales = [256]
+
 
     images = []
     for l in scales:

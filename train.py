@@ -73,7 +73,40 @@ def main():
 
     with tf.Session() as sess:
 
+
         sess.run(tf.global_variables_initializer())
+
+
+        # Yonk test
+        caption_mx = []
+
+        for i, sorted_key in enumerate(sorted(data.test_captions.keys())):
+            captions = data.test_captions[sorted_key]
+            encoded_text_per_class = sess.run(txt_class_mean, feed_dict={t_caption: captions})
+            caption_mx.append(encoded_text_per_class)
+            print('loaded', i)
+
+        _acc_sum, _acccuracy = sess.run([accuracy_summ, accuracy], feed_dict={t_accuracy_caption_mx: caption_mx,
+                                                                              t_accuracy_labels: data.test_labels,
+                                                                              lenet_image: data.test_images})
+        print('BEFORE_LOADED accuracy: %0.5f' % _acccuracy)
+
+        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
+        saver.restore(sess, 'assets/char-rnn-cnn-19999')
+
+        caption_mx = []
+        for i, sorted_key in enumerate(sorted(data.test_captions.keys())):
+            captions = data.test_captions[sorted_key]
+            encoded_text_per_class = sess.run(txt_class_mean, feed_dict={t_caption: captions})
+            caption_mx.append(encoded_text_per_class)
+            print('post_loaded', i)
+
+        _acc_sum, _acccuracy = sess.run([accuracy_summ, accuracy], feed_dict={t_accuracy_caption_mx: caption_mx,
+                                                                              t_accuracy_labels: data.test_labels,
+                                                                              lenet_image: data.test_images})
+        print('AFTER_LOADED accuracy: %0.5f' % _acccuracy)
+
+        writer.add_summary(_acc_sum, update)
 
         for update in range(epochs):
 
