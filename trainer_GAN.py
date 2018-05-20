@@ -2,6 +2,7 @@ import datetime
 from models import *
 from lenet.pretrained import generated_lenet
 from dataloader import *
+from scipy.ndimage import imread
 import matplotlib.pyplot as plt
 import conf
 import tensorflow as tf
@@ -11,7 +12,7 @@ def main():
     """The famous main function that no one knows what it's for"""
 
     # Training parameters
-    batch_size = 64
+    batch_size = 1#64
     epochs = 600
     lr = 0.0002
     lr_decay = 0.5
@@ -27,11 +28,17 @@ def main():
 
 
     # Define placeholders for image and text data
-    text_G = tf.placeholder('float32', [batch_size, 1024], name='text_generator')
-    text_right = tf.placeholder('float32', [batch_size, 1024], name='encoded_right_text')
-    text_wrong = tf.placeholder('float32', [batch_size, 1024], name='encoded_wrong_text')
+    caption_generator = tf.placeholder('float32', [batch_size, 201, 70], name='text_generator')
+    caption_right = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_right_text')
+    caption_wrong = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_wrong_text')
     real_image = tf.placeholder('float32', [batch_size, 64, 64, 3], name='real_image')
     z = tf.placeholder('float32', [batch_size, 100], name='noise')
+
+
+    # Encoded texts
+    text_G = build_char_cnn_rnn(caption_generator)
+    text_right = build_char_cnn_rnn(caption_right)
+    text_wrong = build_char_cnn_rnn(caption_wrong)
 
 
     # Outputs from G and D
@@ -82,6 +89,20 @@ def main():
         sess.run(tf.global_variables_initializer())
         step = 0
 
+        dl = DataLoader()
+        img_r = crop_and_flip(imread('assets/encoder_train/images/image_06734.jpg'),
+                                   crop_just_one=True)  # real image
+        f_r = open('assets/encoder_train/captions/class_00001/image_06734.txt')
+        txt_right = f_r.readlines()[0].strip()
+        caption_r = dl._onehot_encode_text(txt_right).reshape([batch_size, 201, 70])
+
+        f_w = open('assets/encoder_train/captions/class_00018/image_04244.txt')
+        txt_wrong = f_w.readlines()[2].strip()
+        caption_w = dl._onehot_encode_text(txt_wrong).reshape([batch_size, 201, 70])
+
+        caption_g = caption_r.copy()
+
+
         for epoch in range(epochs):
 
             # Updating the learning rate every 100 epochs (starting after first 1000 update steps)
@@ -95,30 +116,30 @@ def main():
             # todo: add condition for mini batches
             step += 1
 
-
-            # Todo: pipeline this shit
-            img_r, txt_r, txt_w = 0
-            txt_G = 0
+            #txt_r = 0
+            #xt_w = 0
+            #txt_G = 0
 
 
             # Sample noise, and synthesize image with generator
             z_sample = np.random.normal(0, 1, (batch_size, 100)) # apparently better to sample like this than with tf
-            G_feed = {text_G: txt_G, z: z_sample}
+            G_feed = {caption_generator: caption_g, z: z_sample}
             img_f = sess.run(fake_image, feed_dict=G_feed)
 
 
             # Todo: make sure to put the right images. different or same?
             # feed_dicts for the discriminator
-            feed_rr = {real_image: img_r, text_right: txt_r}
-            feed_rw = {real_image: img_r, text_wrong: txt_w}
-            feed_fr = {fake_image: img_f, text_G: txt_G} # the only thing that needs to be feed to get the G_loss
+            feed_rr = {real_image: img_r, caption_right: caption_r}
+            feed_rw = {real_image: img_r, caption_wrong: caption_w}
+            feed_fr = {fake_image: img_f, caption_generator: caption_g} # the only thing that needs to be feed to get the G_loss
 
             feed_dict = {**feed_rr, **feed_rw, **feed_fr} # merge these dictionaries
 
 
             # Updates parameters in G and D
-            dloss, _ = sess.run([D_loss, D_opt], feed_dict=feed_dict)
-            gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)
+            dloss, gloss, _, _ = sess.run([D_loss, G_loss, D_opt, G_opt], feed_dict=feed_dict)
+
+            #gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)
 
 
             # Tensorboard stuff

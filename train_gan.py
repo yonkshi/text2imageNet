@@ -13,7 +13,7 @@ import conf
 
 def main():
 
-    z = tf.random_normal((1, 1, 1,100,))
+    z = tf.random_normal((1, 1, 1, 100,))
     txt = tf.random_normal((1, 1, 1, 1024,))
 
     out, test_out = generator_resnet(txt, z)

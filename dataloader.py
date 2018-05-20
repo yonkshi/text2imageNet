@@ -282,7 +282,16 @@ def crop_and_flip(image,os=224, crop_just_one=False):
         im=resize_image_with_smallest_side(image,l)
         h, w, c = im.shape
 
-        if not crop_just_one:
+        # crop middle
+        im_middle = im[(h - os) // 2:(h + os) // 2, (w - os) // 2:(w + os) // 2, :]
+
+        if crop_just_one:
+            return im_middle
+
+        else:
+            images.append(im_middle)
+            images.append(np.fliplr(im_middle))
+
             im_upperleft = im[:os, :os, :]
             images.append(im_upperleft)
             images.append(np.fliplr(im_upperleft))
@@ -299,11 +308,6 @@ def crop_and_flip(image,os=224, crop_just_one=False):
             images.append(im_lowerright)
             images.append(np.fliplr(im_lowerright))
 
-        # crop middle
-        im_middle = im[(h - os) // 2:(h + os) // 2, (w - os) // 2:(w + os) // 2, :]
-        images.append(im_middle)
-        if not crop_just_one:
-            images.append(np.fliplr(im_middle))
 
     #shuffle(images)
 
