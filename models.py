@@ -253,9 +253,9 @@ def discriminator(image, text):
 
         # Dimension of compressed text
         m = 128
-
+        img = tf.reshape(image, (-1, 64, 64, 3))
         # 64 x 64 x 3 Going in
-        conv1 = tf.layers.conv2d(image, n1, kernel_size=k, strides=s, padding = 'same', name='conv1')
+        conv1 = tf.layers.conv2d(img, n1, kernel_size=k, strides=s, padding = 'same', name='conv1')
         batch1 = tf.nn.leaky_relu(tf.layers.batch_normalization(conv1, name='batch1'))
 
         # 32 x 32 x 128 Going in
@@ -285,7 +285,7 @@ def discriminator(image, text):
         out = tf.nn.sigmoid(tf.layers.conv2d(batch5, 1, kernel_size=batch5.shape[1:3]), name='output')
 
         # output is probability for True
-        return out
+        return out, conv4
 
 
 

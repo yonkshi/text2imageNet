@@ -34,7 +34,7 @@ def main():
     caption_wrong = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_wrong_text')
 
     real_image = tf.placeholder('float32', [batch_size, 64, 64, 3], name='real_image')
-    z = tf.placeholder('float32', [batch_size, 100], name='noise')
+    z = tf.placeholder('float32', [conf.GAN_BATCH_SIZE, 100], name='noise')
 
 
     # Encoded texts
@@ -48,16 +48,16 @@ def main():
     iterator_txt_G, next_txt_G = datasource.text_only_pipe()
 
 
-    text_G = build_char_cnn_rnn(caption_generator)
-    text_right = build_char_cnn_rnn(caption_right)
-    text_wrong = build_char_cnn_rnn(caption_wrong)
+    # text_G = build_char_cnn_rnn(caption_generator)
+    # text_right = build_char_cnn_rnn(caption_right)
+    # text_wrong = build_char_cnn_rnn(caption_wrong)
 
 
     # Outputs from G and D
     fake_image = generator(next_txt_G, z)
-    S_r = discriminator(real_image, text_right)
-    S_w = discriminator(real_image2, text_wrong) # todo: maybe here take real_image2
-    S_f = discriminator(fake_image, next_txt_G)
+    S_r, debug_1 = discriminator(real_image, text_right)
+    S_w, debug_2 = discriminator(real_image2, text_wrong) # todo: maybe here take real_image2
+    S_f, debug_3 = discriminator(fake_image, next_txt_G)
 
 
     # Loss functions for G and D
@@ -85,15 +85,10 @@ def main():
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
 
 
-    # to save the graph and all variables
-    saver = tf.train.Saver()
-
-
     # Write to tensorboard
     merged = tf.summary.merge_all()
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
-
 
     # Execute the graph
     with tf.Session() as sess:
@@ -113,27 +108,27 @@ def main():
 
         step = 0
 
-        dl = DataLoader()
-        img_r = crop_and_flip(imread('assets/encoder_train/images/image_06734.jpg'),64,
-                                   crop_just_one=True).reshape([-1, 64, 64, 3])
-
-        plt.imshow(img_r[0])
-        plt.title('before normalizing')
-        plt.show()
-        img_r = (img_r - 127.5)/127.5#normalize_images(img_r)
-        plt.imshow(img_r[0])
-        plt.title('normalized image')
-        plt.show()
-
-        f_r = open('assets/encoder_train/captions/class_00001/image_06734.txt')
-        txt_right = f_r.readlines()[0].strip()
-        caption_r = dl._onehot_encode_text(txt_right).reshape([batch_size, 201, 70])
-
-        f_w = open('assets/encoder_train/captions/class_00018/image_04244.txt')
-        txt_wrong = f_w.readlines()[2].strip()
-        caption_w = dl._onehot_encode_text(txt_wrong).reshape([batch_size, 201, 70])
-
-        caption_g = caption_r.copy()
+        # dl = DataLoader()
+        # img_r = crop_and_flip(imread('assets/encoder_train/images/image_06734.jpg'),64,
+        #                            crop_just_one=True).reshape([-1, 64, 64, 3])
+        #
+        # plt.imshow(img_r[0])
+        # plt.title('before normalizing')
+        # plt.show()
+        # img_r = (img_r - 127.5)/127.5 #normalize_images(img_r)
+        # plt.imshow(img_r[0])
+        # plt.title('normalized image')
+        # plt.show()
+        #
+        # f_r = open('assets/encoder_train/captions/class_00001/image_06734.txt')
+        # txt_right = f_r.readlines()[0].strip()
+        # caption_r = dl._onehot_encode_text(txt_right).reshape([batch_size, 201, 70])
+        #
+        # f_w = open('assets/encoder_train/captions/class_00018/image_04244.txt')
+        # txt_wrong = f_w.readlines()[2].strip()
+        # caption_w = dl._onehot_encode_text(txt_wrong).reshape([batch_size, 201, 70])
+        #
+        # caption_g = caption_r.copy()
 
 
         # todo: give me a pipeline yonk the guru plumber
@@ -159,9 +154,9 @@ def main():
 
 
             # Sample noise, and synthesize image with generator
-            z_sample = np.random.normal(0, 1, (batch_size, 100)) # apparently better to sample like this than with tf
+            z_sample = np.random.normal(0, 1, (conf.GAN_BATCH_SIZE, 100)) # apparently better to sample like this than with tf
             # G_feed = {caption_generator: caption_g, z: z_sample}
-            # img_f = sess.run(fake_image, feed_dict=G_feed)
+            #img_f = sess.run(fake_image, feed_dict=G_feed)
             #
             #
             # # Todo: make sure to put the right images. different or same?
@@ -174,7 +169,12 @@ def main():
 
 
             # Updates parameters in G and D
-            s_r, s_w, s_f, summary, dloss, gloss, _, _ = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt])
+
+
+
+            img1, img2, b4 = sess.run([real_image, real_image2, debug_1])
+
+            s_r, s_w, s_f, summary, dloss, gloss, _, _, img_f = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt, fake_image], feed_dict={z:z_sample})
 
             #gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)
 
@@ -189,10 +189,10 @@ def main():
             if step % 1000 == 0 or epoch == epochs-1:
                 saver.save(sess, './GAN', global_step=step)
 
-            # Uncomment to plot synthesized images
-            im_plot = 0.5*img_f[0] + 0.5
-            plt.imshow(im_plot)
-            plt.show()
+            # Uncomment to plot synthesized images # TODO Uncomment this for Google Cloud
+            # im_plot = 0.5*img_f[0] + 0.5
+            # plt.imshow(im_plot)
+            # plt.show()
 
 
     # Close writer when done training

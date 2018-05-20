@@ -48,8 +48,8 @@ def test_gan_pipeline():
         t0 = time()
         for i in range(1000):
             print('run')
-            _, a = sess.run([next, encoded])
-            _, b = sess.run([next2, encoded2])
+            _, a, i1 = sess.run([next, encoded, img])
+            _, b, i2 = sess.run([next2, encoded2, img2])
             txt_out = sess.run(next_txt)
 
 
@@ -184,10 +184,10 @@ class GanDataLoader(BaseDataLoader):
 
         # Load images
         im = imread(image_path, mode='RGB')  # First time for batch
-        resized_images = crop_and_flip(im, 64, [80], crop_just_one=True)[0] # TODO Resize
+        resized_images = (crop_and_flip(im, 64, [80], crop_just_one=True) - 127.5)/127.5 # TODO Revisit how we resize
 
 
-        return label, txt, resized_images
+        return label, txt, resized_images.astype('float32')
 
     def _run_encoder(self, label, caption, image):
         caption_rigid = tf.reshape(caption,[-1,conf.CHAR_DEPTH, conf.ALPHA_SIZE])
@@ -196,7 +196,7 @@ class GanDataLoader(BaseDataLoader):
 
     def base_pipe(self, pipe_in):
         pipe = pipe_in.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file],
-                                                                   [tf.int8, tf.float32, tf.uint8]),num_parallel_calls=10)
+                                                                   [tf.int8, tf.float32, tf.float32]),num_parallel_calls=10)
         pipe = pipe.prefetch(100)
         pipe = pipe.batch(conf.GAN_BATCH_SIZE)
         pipe = pipe.map(self._run_encoder)
