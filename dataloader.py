@@ -118,6 +118,7 @@ class BaseDataLoader:
 
     def _c2i(self, c: str):
         return conf.ALPHABET.find(c)
+
 class GanDataLoader(BaseDataLoader):
 
     def _incorrect_pair(self):
@@ -425,54 +426,6 @@ def resize_image_with_smallest_side(image, small_size=224):
     else:
         im = misc.imresize(image, (new_height, new_width, im_shape[3]))
         im = np.expand_dims(im, axis=0)
-
-    return im
-
-def crop_and_flip(image,os=224, scales = [256], crop_just_one=False):
-
-    """
-    :param image: An image on tensor form, h x w x 3
-    :param size: output
-    :return:
-    """
-
-    h, w, c = image.shape
-
-
-
-    images = []
-    for l in scales:
-
-        im=resize_image_with_smallest_side(image,l)
-        h, w, c = im.shape
-
-        if not crop_just_one:
-            im_upperleft = im[:os, :os, :]
-            images.append(im_upperleft)
-            images.append(np.fliplr(im_upperleft))
-
-            im_upperright = im[:os, w-os:, :]
-            images.append(im_upperright)
-            images.append(np.fliplr(im_upperright))
-
-            im_lowerleft = im[h-os:, :os, :]
-            images.append(im_lowerleft)
-            images.append(np.fliplr(im_lowerleft))
-
-            im_lowerright = im[h-os:, w-os:, :]
-            images.append(im_lowerright)
-            images.append(np.fliplr(im_lowerright))
-
-        # crop middle
-        im_middle = im[(h - os) // 2:(h + os) // 2, (w - os) // 2:(w + os) // 2, :]
-        images.append(im_middle)
-        if not crop_just_one:
-            images.append(np.fliplr(im_middle))
-
-    #shuffle(images)
-
-    return images
-
 
 if __name__ == '__main__':
     test_gan_pipeline()

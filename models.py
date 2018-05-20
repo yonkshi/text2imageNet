@@ -11,9 +11,11 @@ def build_char_cnn_rnn(input_seqs):
             embed_dim = 1024
             alphasize = 70 # like in paper?
 
+
             # 201 x alphasize
             conv1 = tf.layers.conv1d(input_seqs, 384, 4, activation=tf.nn.relu, name='txt_conv1')
             max1 = tf.layers.max_pooling1d(conv1, pool_size=3, name='txt_max1', strides=3)
+
 
             # 66 x 384
             conv2 = tf.layers.conv1d(max1, 512, 4, activation=tf.nn.relu, name='txt_conv2')
@@ -32,19 +34,14 @@ def build_char_cnn_rnn(input_seqs):
             output_stacked = tf.stack(outputs, axis=1)
             normalized = tf.reduce_mean(output_stacked, axis=1)
 
+            # unroll batch
+            outputs, states = rnn.static_rnn(rnn_cell, tf.unstack(cnn_out, axis=1),  dtype=tf.float32)
+            output_stacked = tf.stack(outputs, axis=1)
+            normalized = tf.reduce_mean(output_stacked, axis=1)
+
             out = tf.layers.dense(normalized, embed_dim, name='txt_upscale_dense')
 
-    return out
-
-def downscaler(encoded_text):
-
-    with tf.variable_scope('downscaler'):
-
-        m = 128
-        out = tf.layers.dense(encoded_text, m, activation=tf.nn.leaky_relu, name='dense')
-
         return out
-
 
 def generator_resnet(text, z, enable_res = True):
 
@@ -117,6 +114,7 @@ def generator_resnet(text, z, enable_res = True):
         net5 = tf.nn.tanh(net5)
 
         return net5
+
 def discriminator_resnet(gan_image, text, enable_res = True):
     with tf.variable_scope('discriminator_resnet'):
         m = 128
@@ -186,6 +184,13 @@ def discriminator_resnet(gan_image, text, enable_res = True):
 
 def generator(text, z):
 
+    """
+    Generator network
+    :param text: encoded input batch    ~ batch_size x 1024
+    :param z: sampled noise             ~ batch_size x 100
+    :return: synthesized network        ~ batch_size x 64 x 64 x 3
+    """
+
     with tf.variable_scope('generator'):
 
         # side length of input to first conv layer
@@ -229,10 +234,19 @@ def generator(text, z):
 
 def discriminator(image, text):
 
-    with tf.variable_scope('discriminator'):
+    """
+    Discriminator network
+    :param image: image                 ~ batch_size x 64 x 64 x 3
+    :param text: encoded input batch    ~ batch_size x 1024
+    :return: probability for True
+    """
+
+    # z     : batch_size x 100
+
+    with tf.variable_scope('discriminator', reuse=tf.AUTO_REUSE):
 
         # Number of filters
-        n1 = 128; n2 = 256; n3 = 512; n4 = 1024;
+        n1 = 128; n2 = 256; n3 = 512; n4 = 1024
 
         # kernels and strides
         k = (5,5); s = (2,2)
@@ -257,7 +271,7 @@ def discriminator(image, text):
         batch4 = tf.nn.leaky_relu(tf.layers.batch_normalization(conv4, name='batch4'))
 
         # compress text and the make into matrix. tiled is 4 x 4 x 128
-        text = tf.layers.dense(text, m)
+        text = tf.reshape(tf.layers.dense(text, m), [-1, 1, 1, m])
         tiled = tf.tile(text, [1, 4, 4, 1])
 
         # Concatenate convoluted image and tiled version of text depthwise
