@@ -195,6 +195,7 @@ class GanDataLoader(BaseDataLoader):
         pipe = pipe.prefetch(100)
         pipe = pipe.batch(conf.GAN_BATCH_SIZE)
         pipe = pipe.map(self._run_encoder)
+        pipe = pipe.prefetch(20)
 
         pipe_iter = pipe.make_initializable_iterator()
         pipe_next = pipe_iter.get_next()
