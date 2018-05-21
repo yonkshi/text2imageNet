@@ -39,10 +39,10 @@ def main():
 
 
     # Outputs from G and D
-    fake_image = generator(text_G, z)
-    S_r, debug_1 = discriminator(real_image, text_right)
-    S_w, debug_2 = discriminator(real_image2, text_wrong) # todo: maybe here take real_image2
-    S_f, debug_3 = discriminator(fake_image, text_G)
+    fake_image = generator_resnet(text_G, z)
+    S_r = discriminator_resnet(real_image, text_right)
+    S_w = discriminator_resnet(real_image2, text_wrong)
+    S_f = discriminator_resnet(fake_image, text_G)
 
 
     # Loss functions for G and D

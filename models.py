@@ -43,20 +43,21 @@ def build_char_cnn_rnn(input_seqs):
 
         return out
 
-def generator_resnet(text, z, enable_res = True):
+def generator_resnet(text, z, enable_res = False):
 
-    with tf.variable_scope('generator_resnet'):
+    with tf.variable_scope('generator_resnet', reuse=tf.AUTO_REUSE):
 
         #nt = 256
         ngf = conf.NUM_G_FILTER
         m = conf.ENCODED_TEXT_SIZE
 
+
         # sample noise
-        #z = tf.random_normal((Z, 1))
+        zz = tf.random_normal((conf.GAN_BATCH_SIZE, 100))
 
         # Noise concatenated with encoded text
-        downscaled_text = tf.layers.dense(text, m, activation=tf.nn.leaky_relu, name='linear')
-        conc = tf.concat([z, downscaled_text], axis=-1)
+        downscaled_text = tf.layers.dense(text, m,  activation=tf.nn.leaky_relu, name='linear')
+        conc = tf.concat([zz, downscaled_text], axis=-1)
         net1 = tf.layers.dense(conc, ngf * 8 * 4 * 4, activation=tf.nn.leaky_relu)
         net1 = tf.reshape(net1, (-1, 4, 4, ngf * 8))
         net1 = tf.layers.batch_normalization(net1)
@@ -115,13 +116,14 @@ def generator_resnet(text, z, enable_res = True):
 
         return net5
 
-def discriminator_resnet(gan_image, text, enable_res = True):
-    with tf.variable_scope('discriminator_resnet'):
+def discriminator_resnet(gan_image, text, enable_res = False):
+    with tf.variable_scope('discriminator_resnet', reuse=tf.AUTO_REUSE):
         m = 128
         ndf = conf.NUM_D_FILTER
 
         # Text input
-        txt = tf.layers.dense(text, m,)
+        #txt = tf.layers.dense(text, m,)
+        txt = tf.reshape(tf.layers.dense(text, m), [-1, 1, 1, m])
         txt = tf.layers.batch_normalization(txt)
         txt = tf.nn.leaky_relu(txt)
         # nn.Replicate(4,3)
@@ -130,8 +132,8 @@ def discriminator_resnet(gan_image, text, enable_res = True):
 
         # image imput
         # input is (nc) x 64 x 64
-
-        img = tf.layers.conv2d(gan_image, ndf, (4,4),
+        img = tf.reshape(gan_image, (-1, 64, 64, 3)) # Image size
+        img = tf.layers.conv2d(img, ndf, (4,4),
                          strides=(2,2),
                          activation=tf.nn.leaky_relu)
 
