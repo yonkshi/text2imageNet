@@ -190,7 +190,10 @@ def main():
             # Tensorboard stuff
             writer.add_summary(summary, step)
             print('Update: ', step)
-            print('Discriminator loss: ', dloss)
+            try:
+                print('Discriminator loss: ', dloss)
+            except:
+                aaaaa = 0
             print('Generator loss: ', gloss)
 
             if epoch % 10 == 0:
