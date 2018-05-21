@@ -16,7 +16,7 @@ def main():
     epochs = 60000
     lr = 0.0002
     lr_decay = 0.5
-    decay_every = 1000
+    decay_every = 10000
     beta1 = 0.5
 
 
@@ -106,7 +106,7 @@ def main():
 
             # Updates parameters in G and D, only every third time for D
             print('Update: ', step)
-            if step % 3 == 0:
+            if step % 1 == 0:
                 s_r, s_w, s_f, summary, dloss, gloss, _, _, fake_img_summary = sess.run(
                     [S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt, fake_img_summary_op],
                     feed_dict={z:z_sample})
