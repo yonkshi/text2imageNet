@@ -17,6 +17,7 @@ def main():
     lr = 0.0002
     lr_decay = 0.5
     decay_every = 1000
+    save_every = 1000
     beta1 = 0.5
 
 
@@ -105,7 +106,7 @@ def main():
 
 
             # Updates parameters in G and D, only every third time for D
-            print('Update: ', step)
+            print('Step: ', step)
             if step % 3 == 0:
                 s_r, s_w, s_f, summary, dloss, gloss, _, _, fake_img_summary = sess.run(
                     [S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt, fake_img_summary_op],
@@ -127,7 +128,7 @@ def main():
             if step % 10 == 0:
                 writer.add_summary(fake_img_summary, step)
 
-            if step % 1000 == 0:
+            if step % save_every == 0:
                 saver.save(sess, 'saved/', global_step=step)
 
 
