@@ -108,7 +108,6 @@ def main():
 
         # Run the initializers for the pipeline
         sess.run([iterator.initializer, iterator_incorrect.initializer, iterator_txt_G.initializer])
-        sess.run([iter_test0.initializer, iter_test1.initializer])
 
         for step in range(epochs):
 
@@ -142,13 +141,17 @@ def main():
 
             # Tensorboard stuff
             writer.add_summary(summary, step)
-            test_deter, test_undeter, test_batch_summary = sess.run([test_deter_summary_op, test_undeter_summary_op, test_batch_summary_op])
-            writer.add_summary(test_deter, step)
-            writer.add_summary(test_undeter, step)
-            writer.add_summary(test_batch_summary, step)
+
 
             if step % 10 == 0:
                 writer.add_summary(fake_img_summary, step)
+
+            if step % 100 == 0:
+                sess.run([iter_test0.initializer, iter_test1.initializer])
+                test_deter, test_undeter, test_batch_summary = sess.run([test_deter_summary_op, test_undeter_summary_op, test_batch_summary_op])
+                writer.add_summary(test_deter, step)
+                writer.add_summary(test_undeter, step)
+                writer.add_summary(test_batch_summary, step)
 
             if step % save_every == 0:
                 saver.save(sess, 'saved/', global_step=step)
