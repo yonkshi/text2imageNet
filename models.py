@@ -43,7 +43,7 @@ def build_char_cnn_rnn(input_seqs):
 
         return out
 
-def generator_resnet(text, z, enable_res = False, z_size = None):
+def generator_resnet(text, enable_res = False, z_size = None):
 
     with tf.variable_scope('generator_resnet', reuse=tf.AUTO_REUSE):
 
