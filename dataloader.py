@@ -167,7 +167,30 @@ class GanDataLoader(BaseDataLoader):
             img_path = os.path.join(self.image_path, random_file + '.jpg')
             yield 1, cap_path, img_path
 
-    def _load_file(self, label, caption_path, image_path, skip_image=False):
+    def _test_pair_determ(self):
+        while True:
+            # sample caption
+
+            cls = list(self.testset_metadata.keys())[0]
+            random_file = self.trainset_metadata[cls][0]  # second class
+
+            class_dir = 'class_%05d' % (cls + 1) # 1 based index for class dir
+            cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
+            img_path = os.path.join(self.image_path, random_file + '.jpg')
+            yield 1, cap_path, img_path
+
+    def _test_pair(self):
+        while True:
+            # sample caption
+            cls = random.choice(list(self.testset_metadata.keys()))
+            random_file = random.choice(self.trainset_metadata[cls])
+
+            class_dir = 'class_%05d' % (cls + 1) # 1 based index for class dir
+            cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
+            img_path = os.path.join(self.image_path, random_file + '.jpg')
+            yield 1, cap_path, img_path
+
+    def _load_file(self, label, caption_path, image_path, deterministic=False):
         '''
         File loader for the dataset pipeline
 
@@ -181,11 +204,13 @@ class GanDataLoader(BaseDataLoader):
         with open(caption_path, 'r') as txt_file:
             lines = txt_file.readlines()
         line = random.choice(lines)
+        if deterministic:
+            line = lines[0]
         txt = np.array(self._onehot_encode_text(line),dtype='float32')
 
         # Load images
         im = imread(image_path, mode='RGB')  # First time for batch
-        resized_images = (sample_image_crop_flip(im) - 127.5)/127.5
+        resized_images = (sample_image_crop_flip(im, deterministic=deterministic) - 127.5)/127.5
 
         return label, txt, resized_images.astype('float32')
 
@@ -194,11 +219,11 @@ class GanDataLoader(BaseDataLoader):
         encoded_caption = build_char_cnn_rnn(caption_rigid)
         return label, encoded_caption, image
 
-    def base_pipe(self, pipe_in):
-        pipe = pipe_in.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file],
+    def base_pipe(self, pipe_in, batch_size = conf.GAN_BATCH_SIZE, deterministic=False):
+        pipe = pipe_in.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file, deterministic],
                                                                    [tf.int8, tf.float32, tf.float32]),num_parallel_calls=10)
         pipe = pipe.prefetch(100)
-        pipe = pipe.batch(conf.GAN_BATCH_SIZE)
+        pipe = pipe.batch(batch_size)
         pipe = pipe.map(self._run_encoder)
         pipe = pipe.prefetch(20)
 
@@ -252,6 +277,23 @@ class GanDataLoader(BaseDataLoader):
         # pipe_iter = pipe.make_initializable_iterator()
         # pipe_next = pipe_iter.get_next()
         return self.correct_pipe()
+
+    def test_pipe(self, deterministic=False):
+        '''
+
+        :param deterministic: Chooses if the output test is derterministic (defaults to test set 1)
+        :return:
+        '''
+        '''spid out two images'''
+        if deterministic:
+            test = tf.data.Dataset.from_generator(self._test_pair_determ, (tf.int8, tf.string, tf.string))
+        else:
+            test = tf.data.Dataset.from_generator(self._test_pair, (tf.int8, tf.string, tf.string))
+        test_iterator, test_next = self.base_pipe(test,batch_size=1, deterministic=deterministic)
+        (label, encoded_txt, img) = test_next
+        return test_iterator, test_next, (label, encoded_txt, img)
+
+
 
 class DataLoader(BaseDataLoader):
     def __init__(self):
