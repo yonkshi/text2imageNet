@@ -29,11 +29,12 @@ def main():
 
 
     # Define placeholders for image and text data
-    caption_generator = tf.placeholder('float32', [batch_size, 201, 70], name='text_generator')
-    caption_right = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_right_text')
-    caption_wrong = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_wrong_text')
+    #caption_generator = tf.placeholder('float32', [batch_size, 201, 70], name='text_generator')
+    #caption_right = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_right_text')
+    #caption_wrong = tf.placeholder('float32', [batch_size, 201, 70], name='encoded_wrong_text')
 
-    real_image = tf.placeholder('float32', [batch_size, 64, 64, 3], name='real_image')
+    #real_image = tf.placeholder('float32', [batch_size, 64, 64, 3], name='real_image')
+
     z = tf.placeholder('float32', [conf.GAN_BATCH_SIZE, 100], name='noise')
 
 
@@ -65,8 +66,6 @@ def main():
     D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2)
     tf.summary.scalar('generator_loss', G_loss)
     tf.summary.scalar('discriminator_loss', D_loss)
-
-
 
 
     # Parameters we want to train, and their gradients
@@ -150,13 +149,11 @@ def main():
             # todo: add condition for mini batches
             step += 1
 
-            #txt_r = 0
-            #xt_w = 0
-            #txt_G = 0
-
 
             # Sample noise, and synthesize image with generator
-            z_sample = np.random.normal(0, 1, (conf.GAN_BATCH_SIZE, 100)) # apparently better to sample like this than with tf
+            #z_sample = np.random.normal(0, 1, (conf.GAN_BATCH_SIZE, 100)) # apparently better to sample like this than with tf
+            z_sample = tf.random_normal((conf.GAN_BATCH_SIZE, 100))
+
             # G_feed = {caption_generator: caption_g, z: z_sample}
             #img_f = sess.run(fake_image, feed_dict=G_feed)
             #
