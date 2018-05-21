@@ -84,7 +84,7 @@ def main():
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
 
-    saver = tf.train.Saver()
+    #saver = tf.train.Saver()
 
     # Write to tensorboard
     merged = tf.summary.merge_all()
@@ -192,8 +192,8 @@ def main():
             if epoch % 10 == 0:
                 writer.add_summary(fake_img_summary, epoch)
 
-            if step % 1000 == 0 or epoch == epochs-1:
-                saver.save(sess, 'saved/', global_step=step)
+            # if step % 1000 == 0 or epoch == epochs-1:
+            #     saver.save(sess, 'saved/', global_step=step)
 
             # Uncomment to plot synthesized images # TODO Uncomment this for Google Cloud
             # im_plot = 0.5*img_f[0] + 0.5
