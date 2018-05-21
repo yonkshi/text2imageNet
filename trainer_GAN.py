@@ -170,12 +170,12 @@ def main():
 
             # Updates parameters in G and D
 
-            if step % 3 == 0:
-                s_r, s_w, s_f, summary, dloss, gloss, _, _,  fake_img_summary = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt,fake_img_summary_op], feed_dict={z:z_sample})
-
-            else:
-                s_r, s_w, s_f, summary, gloss, _,  fake_img_summary = sess.run(
-                    [S_r, S_w, S_f, merged, G_loss, G_opt, fake_img_summary_op], feed_dict={z: z_sample})
+            # if step % 3 == 0:
+            #     s_r, s_w, s_f, summary, dloss, gloss, _, _,  fake_img_summary = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt,fake_img_summary_op], feed_dict={z:z_sample})
+            #
+            # else:
+            s_r, s_w, s_f, summary, gloss, _,  fake_img_summary = sess.run(
+                [S_r, S_w, S_f, merged, G_loss, G_opt, fake_img_summary_op], feed_dict={z: z_sample})
 
             #gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)
 
