@@ -88,6 +88,8 @@ def main():
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
 
+    tf.summary.scalar('generator_loss', G_loss, family='GAN')
+    tf.summary.scalar('discriminator_loss', D_loss, family='GAN')
 
     # Write to tensorboard
     merged = tf.summary.merge_all()
@@ -165,8 +167,7 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
             D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2, name='G_loss_gpu%d' % gpu_num)
 
-            tf.summary.scalar('generator_loss', G_loss, family='GAN')
-            tf.summary.scalar('discriminator_loss', D_loss, family='GAN')
+
 
 
             # Parameters we want to train, and their gradients
