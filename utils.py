@@ -2,6 +2,7 @@ import numpy as np
 from scipy import misc
 from scipy.ndimage import imread
 from random import shuffle
+import random
 import matplotlib.pyplot as plt
 
 
@@ -21,6 +22,26 @@ def normalize_images(images):
 
     return images
 
+def sample_image_crop_flip(image, output_size=64, scale_size=70):
+
+    im = resize_image_with_smallest_side(image, scale_size)
+
+    h, w, c = im.shape
+    os = output_size
+
+    def crop_middle(im): return im[(h - os) // 2:(h + os) // 2, (w - os) // 2:(w + os) // 2, :]
+    def crop_topleft(im): return im[:os, :os, :]
+    def crop_topright(im): return im[:os, w-os:, :]
+    def crop_bottomright(im): return im[h-os:, w-os:, :]
+    def crop_bottomleft(im): return im[h-os:, :os, :]
+
+    def flip(im): return np.fliplr(im)
+    def donothing(im): return im
+
+    crop = random.choice([crop_middle,crop_topleft,crop_topright,crop_bottomright,crop_bottomleft])
+    flip_maybe = random.choice([flip,donothing])
+
+    return flip_maybe(crop(im))
 
 def crop_and_flip(image,os=224, scales = [256],crop_just_one=False):
 
@@ -34,10 +55,12 @@ def crop_and_flip(image,os=224, scales = [256],crop_just_one=False):
 
     #scales = [80]
 
+
+
     images = []
     for l in scales:
+        im = resize_image_with_smallest_side(image, l)
 
-        im=resize_image_with_smallest_side(image,l)
         h, w, c = im.shape
 
         # crop middle

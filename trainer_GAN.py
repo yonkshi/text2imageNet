@@ -13,11 +13,10 @@ def main():
     """The famous main function that no one knows what it's for"""
 
     # Training parameters
-    batch_size = 64
-    epochs = 600
+    epochs = 60000
     lr = 0.0002
     lr_decay = 0.5
-    decay_every = 100
+    decay_every = 1000
     beta1 = 0.5
 
 
@@ -46,7 +45,7 @@ def main():
     datasource = GanDataLoader()
     iterator, next, (label, text_right, real_image) = datasource.correct_pipe()
     iterator_incorrect, next_incorrect, (label2, text_wrong, real_image2) = datasource.incorrect_pipe()
-    iterator_txt_G, next_txt_G = datasource.text_only_pipe()
+    iterator_txt_G, next_txt_G, (label3, text_G, real_image_G) = datasource.text_only_pipe()
 
 
     # text_G = build_char_cnn_rnn(caption_generator)
@@ -55,10 +54,10 @@ def main():
 
 
     # Outputs from G and D
-    fake_image = generator(next_txt_G, z)
+    fake_image = generator(text_G, z)
     S_r, debug_1 = discriminator(real_image, text_right)
     S_w, debug_2 = discriminator(real_image2, text_wrong) # todo: maybe here take real_image2
-    S_f, debug_3 = discriminator(fake_image, next_txt_G)
+    S_f, debug_3 = discriminator(fake_image, text_G)
 
 
     # Loss functions for G and D
@@ -88,7 +87,7 @@ def main():
 
     # Write to tensorboard
     merged = tf.summary.merge_all()
-    fake_img_summary_op = tf.summary.image('generator_out', fake_image * 127.5)
+    fake_img_summary_op = tf.summary.image('generated_image', tf.concat([fake_image * 127.5, real_image_G * 127.5], axis=2))
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
 
@@ -151,8 +150,9 @@ def main():
 
 
             # Sample noise, and synthesize image with generator
-            #z_sample = np.random.normal(0, 1, (conf.GAN_BATCH_SIZE, 100)) # apparently better to sample like this than with tf
-            z_sample = tf.random_normal((conf.GAN_BATCH_SIZE, 100))
+            z_sample = np.random.normal(0, 1, (conf.GAN_BATCH_SIZE, 100)) # apparently better to sample like this than with tf
+            #z_sample = tf.random_normal((conf.GAN_BATCH_SIZE, 100))
+
 
             # G_feed = {caption_generator: caption_g, z: z_sample}
             #img_f = sess.run(fake_image, feed_dict=G_feed)
@@ -169,15 +169,11 @@ def main():
 
             # Updates parameters in G and D
 
-
-
-            img1, img2, b4 = sess.run([real_image, real_image2, debug_1])
-
             if step % 3 == 0:
-                s_r, s_w, s_f, summary, dloss, gloss, _, _, fake_img_summary = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt, fake_img_summary_op], feed_dict={z:z_sample})
+                s_r, s_w, s_f, summary, dloss, gloss, _, _,  fake_img_summary = sess.run([S_r, S_w, S_f, merged, D_loss, G_loss, D_opt, G_opt,fake_img_summary_op], feed_dict={z:z_sample})
 
             else:
-                s_r, s_w, s_f, summary, gloss, _, fake_img_summary = sess.run(
+                s_r, s_w, s_f, summary, gloss, _,  fake_img_summary = sess.run(
                     [S_r, S_w, S_f, merged, G_loss, G_opt, fake_img_summary_op], feed_dict={z: z_sample})
 
             #gloss, _ = sess.run([G_loss, G_opt], feed_dict=feed_fr)

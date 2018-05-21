@@ -24,10 +24,11 @@ from utils import *
 
 def test_gan_pipeline():
     print('hello world')
+
     l = GanDataLoader()
     iterator, next, (label, encoded, img) = l.correct_pipe()
     iterator2, next2, (label2, encoded2, img2) = l.incorrect_pipe()
-    iterator_txt, next_txt = l.text_only_pipe()
+    iterator_txt, next_txt, (label3, encoded3, img3) = l.text_only_pipe()
 
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p")
 
@@ -50,7 +51,7 @@ def test_gan_pipeline():
             print('run')
             _, a, i1 = sess.run([next, encoded, img])
             _, b, i2 = sess.run([next2, encoded2, img2])
-            txt_out = sess.run(next_txt)
+            txt_out = sess.run(encoded3)
 
 
             print(tf.shape(a))
@@ -184,8 +185,7 @@ class GanDataLoader(BaseDataLoader):
 
         # Load images
         im = imread(image_path, mode='RGB')  # First time for batch
-        resized_images = (crop_and_flip(im, 64, [64], crop_just_one=True) - 127.5)/127.5 # TODO Revisit how we resize
-
+        resized_images = (sample_image_crop_flip(im) - 127.5)/127.5
 
         return label, txt, resized_images.astype('float32')
 
@@ -251,7 +251,7 @@ class GanDataLoader(BaseDataLoader):
         #
         # pipe_iter = pipe.make_initializable_iterator()
         # pipe_next = pipe_iter.get_next()
-        return self.incorrect_pipe()
+        return self.correct_pipe()
 
 class DataLoader(BaseDataLoader):
     def __init__(self):
