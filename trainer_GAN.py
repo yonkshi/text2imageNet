@@ -84,6 +84,7 @@ def main():
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
 
+    saver = tf.train.Saver()
 
     # Write to tensorboard
     merged = tf.summary.merge_all()
@@ -98,8 +99,8 @@ def main():
 
         # Yonk stuff here
 
-        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
-        saver.restore(sess, 'assets/char-rnn-cnn-19999')
+        encoder_saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
+        encoder_saver.restore(sess, 'assets/char-rnn-cnn-19999')
 
         sess.run(iterator.initializer)
         sess.run(iterator_incorrect.initializer)
@@ -192,7 +193,7 @@ def main():
                 writer.add_summary(fake_img_summary, epoch)
 
             if step % 1000 == 0 or epoch == epochs-1:
-                saver.save(sess, './GAN', global_step=step)
+                saver.save(sess, 'saved/', global_step=step)
 
             # Uncomment to plot synthesized images # TODO Uncomment this for Google Cloud
             # im_plot = 0.5*img_f[0] + 0.5
