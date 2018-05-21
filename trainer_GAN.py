@@ -13,10 +13,10 @@ def main():
     """The famous main function that no one knows what it's for"""
 
     # Training parameters
-    epochs = 600
+    epochs = 60000
     lr = 0.0002
     lr_decay = 0.5
-    decay_every = 100
+    decay_every = 1000
     beta1 = 0.5
 
 
@@ -35,14 +35,14 @@ def main():
     datasource = GanDataLoader()
     iterator, next, (label, text_right, real_image) = datasource.correct_pipe()
     iterator_incorrect, next_incorrect, (label2, text_wrong, real_image2) = datasource.incorrect_pipe()
-    iterator_txt_G, next_txt_G = datasource.text_only_pipe()
+    iterator_txt_G, next_txt_G, (label3, text_G, real_image_G) = datasource.text_only_pipe()
 
 
     # Outputs from G and D
-    fake_image = generator(next_txt_G, z)
+    fake_image = generator(text_G, z)
     S_r, debug_1 = discriminator(real_image, text_right)
     S_w, debug_2 = discriminator(real_image2, text_wrong) # todo: maybe here take real_image2
-    S_f, debug_3 = discriminator(fake_image, next_txt_G)
+    S_f, debug_3 = discriminator(fake_image, text_G)
 
 
     # Loss functions for G and D
@@ -69,10 +69,11 @@ def main():
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
 
+    #saver = tf.train.Saver()
 
     # Write to tensorboard
     merged = tf.summary.merge_all()
-    fake_img_summary_op = tf.summary.image('generator_out', fake_image * 127.5)
+    fake_img_summary_op = tf.summary.image('generated_image', tf.concat([fake_image * 127.5, real_image_G * 127.5], axis=2))
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
 
@@ -82,8 +83,8 @@ def main():
         sess.run(tf.global_variables_initializer())
 
 
-        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
-        saver.restore(sess, 'assets/char-rnn-cnn-19999')
+        encoder_saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
+        encoder_saver.restore(sess, 'assets/char-rnn-cnn-19999')
 
 
         # Run the initializers for the pipeline
@@ -126,8 +127,8 @@ def main():
             if step % 10 == 0:
                 writer.add_summary(fake_img_summary, step)
 
-            if step % 1000 == 0 or step == epochs - 1:
-                saver.save(sess, './GAN', global_step=step)
+            # if step % 1000 == 0 or epoch == epochs-1:
+            #     saver.save(sess, 'saved/', global_step=step)
 
 
     # Close writer when done training
