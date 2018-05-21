@@ -32,7 +32,7 @@ def crop_and_flip(image,os=224, scales = [256],crop_just_one=False):
 
     h, w, c = image.shape
 
-    scales = [80]
+    #scales = [80]
 
     images = []
     for l in scales:

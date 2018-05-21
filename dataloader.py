@@ -184,7 +184,7 @@ class GanDataLoader(BaseDataLoader):
 
         # Load images
         im = imread(image_path, mode='RGB')  # First time for batch
-        resized_images = (crop_and_flip(im, 64, [80], crop_just_one=True) - 127.5)/127.5 # TODO Revisit how we resize
+        resized_images = (crop_and_flip(im, 64, [64], crop_just_one=True) - 127.5)/127.5 # TODO Revisit how we resize
 
 
         return label, txt, resized_images.astype('float32')
@@ -220,38 +220,38 @@ class GanDataLoader(BaseDataLoader):
 
     def text_only_pipe(self):
 
-        def text_gen():
-            while True:
-                random_class = random.choice(list(self.trainset_metadata.keys()))
-                random_file = random.choice(self.trainset_metadata[random_class])
-                class_dir = 'class_%05d' % (random_class + 1) # 1 based index for class dir
-                cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
-
-                # Load captions for image
-                with open(cap_path, 'r') as txt_file:
-                    lines = txt_file.readlines()
-                line = random.choice(lines)
-                txt = np.array(self._onehot_encode_text(line), dtype='float32')
-
-                yield txt
-        def do_nothing(txt):
-            return txt
-        def text_encode(caption):
-            caption_rigid = tf.reshape(caption, [-1, conf.CHAR_DEPTH, conf.ALPHA_SIZE])
-            encoded_caption = build_char_cnn_rnn(caption_rigid)
-            return encoded_caption
-
-        txt_pipe = tf.data.Dataset.from_generator(text_gen, tf.float32)
-
-        pipe = txt_pipe.prefetch(100)
-        pipe = pipe.map(do_nothing)
-        pipe = pipe.batch(conf.GAN_BATCH_SIZE)
-        pipe = pipe.map(text_encode)
-        pipe = pipe.prefetch(20)
-
-        pipe_iter = pipe.make_initializable_iterator()
-        pipe_next = pipe_iter.get_next()
-        return pipe_iter, pipe_next
+        # def text_gen():
+        #     while True:
+        #         random_class = random.choice(list(self.trainset_metadata.keys()))
+        #         random_file = random.choice(self.trainset_metadata[random_class])
+        #         class_dir = 'class_%05d' % (random_class + 1) # 1 based index for class dir
+        #         cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
+        #
+        #         # Load captions for image
+        #         with open(cap_path, 'r') as txt_file:
+        #             lines = txt_file.readlines()
+        #         line = random.choice(lines)
+        #         txt = np.array(self._onehot_encode_text(line), dtype='float32')
+        #
+        #         yield txt
+        # def do_nothing(txt):
+        #     return txt
+        # def text_encode(caption):
+        #     caption_rigid = tf.reshape(caption, [-1, conf.CHAR_DEPTH, conf.ALPHA_SIZE])
+        #     encoded_caption = build_char_cnn_rnn(caption_rigid)
+        #     return encoded_caption
+        #
+        # txt_pipe = tf.data.Dataset.from_generator(text_gen, tf.float32)
+        #
+        # pipe = txt_pipe.prefetch(100)
+        # pipe = pipe.map(do_nothing)
+        # pipe = pipe.batch(conf.GAN_BATCH_SIZE)
+        # pipe = pipe.map(text_encode)
+        # pipe = pipe.prefetch(20)
+        #
+        # pipe_iter = pipe.make_initializable_iterator()
+        # pipe_next = pipe_iter.get_next()
+        return self.incorrect_pipe()
 
 class DataLoader(BaseDataLoader):
     def __init__(self):
