@@ -142,9 +142,8 @@ def main():
 
             # Updating the learning rate every 100 epochs (starting after first 1000 update steps)
             if epoch != 0 and step > 1000 and (epoch % decay_every == 0):
-                new_lr_decay = lr_decay ** (epoch // decay_every)
-                sess.run(tf.assign(lr_v, lr * new_lr_decay))
-                log = " ** new learning rate: %f" % (lr * new_lr_decay)
+                sess.run(tf.assign(lr_v, lr_v * lr_decay))
+                log = " ** new learning rate: %f" % (lr * lr_decay)
                 print(log)
 
 
@@ -206,7 +205,6 @@ def main():
             # im_plot = 0.5*img_f[0] + 0.5
             # plt.imshow(im_plot)
             # plt.show()
-
 
     # Close writer when done training
     writer.close()
