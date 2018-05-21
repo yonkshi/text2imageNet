@@ -71,14 +71,32 @@ def main():
 
 
 
-    #saver = tf.train.Saver()
-
     # Write to tensorboard
     merged = tf.summary.merge_all()
     fake_img_summary_op = tf.summary.image('generated_image', tf.concat([fake_image * 127.5, real_image_G * 127.5], axis=2))
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
 
+    # Test pipe setup
+    # Determinsitic
+    iter_test0, next_test0, (label4, test_deter_txt, test_deter_img) = datasource.test_pipe(deterministic=True)
+    test_deter_G_img = generator_resnet(test_deter_txt, z, z_size=1)
+    img = tf.concat([test_deter_G_img * 127.5, test_deter_img * 127.5], axis=2)
+    test_deter_summary_op = tf.summary.image('test_deterministic',img, family='teststuff')
+
+    # Underterministic
+    iter_test1, next_test1, (label4, test_undeter_txt, test_undeter_img) = datasource.test_pipe(deterministic=False)
+    test_undeter_G_img = generator_resnet(test_undeter_txt, z, z_size=1)
+    img = tf.concat([test_undeter_G_img * 127.5, test_undeter_img * 127.5], axis=2)
+    test_undeter_summary_op = tf.summary.image('test_non_determ',img, family='teststuff')
+
+    test_batch_txt = tf.concat([test_deter_txt, test_undeter_txt],axis=0)
+    test_batch_img = tf.concat([test_deter_img, test_undeter_img], axis=0)
+    test_batch_G_img = generator_resnet(test_batch_txt, z, z_size=2)
+    img = tf.concat([test_batch_G_img * 127.5, test_batch_img * 127.5], axis=2)
+    test_batch_summary_op = tf.summary.image('test_batch',img, family='teststuff')
+
+    #
     # Execute the graph
     with tf.Session() as sess:
 
@@ -89,7 +107,7 @@ def main():
 
         # Run the initializers for the pipeline
         sess.run([iterator.initializer, iterator_incorrect.initializer, iterator_txt_G.initializer])
-
+        sess.run([iter_test0.initializer, iter_test1.initializer])
 
         for step in range(epochs):
 
@@ -123,6 +141,10 @@ def main():
 
             # Tensorboard stuff
             writer.add_summary(summary, step)
+            test_deter, test_undeter, test_batch_summary = sess.run([test_deter_summary_op, test_undeter_summary_op, test_batch_summary_op])
+            writer.add_summary(test_deter, step)
+            writer.add_summary(test_undeter, step)
+            writer.add_summary(test_batch_summary, step)
 
             if step % 10 == 0:
                 writer.add_summary(fake_img_summary, step)

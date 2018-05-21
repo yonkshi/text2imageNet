@@ -43,7 +43,7 @@ def build_char_cnn_rnn(input_seqs):
 
         return out
 
-def generator_resnet(text, z, enable_res = False):
+def generator_resnet(text, z, enable_res = False, z_size = None):
 
     with tf.variable_scope('generator_resnet', reuse=tf.AUTO_REUSE):
 
@@ -54,6 +54,7 @@ def generator_resnet(text, z, enable_res = False):
 
         # sample noise
         zz = tf.random_normal((conf.GAN_BATCH_SIZE, 100))
+        if z_size is not None: zz = tf.random_normal((z_size, 100))
 
         # Noise concatenated with encoded text
         downscaled_text = tf.layers.dense(text, m,  activation=tf.nn.leaky_relu, name='linear')
