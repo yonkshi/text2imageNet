@@ -69,6 +69,8 @@ def main():
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
 
+
+
     #saver = tf.train.Saver()
 
     # Write to tensorboard
@@ -81,11 +83,9 @@ def main():
     with tf.Session() as sess:
 
         sess.run(tf.global_variables_initializer())
-
-
-        encoder_saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
-        encoder_saver.restore(sess, 'assets/char-rnn-cnn-19999')
-
+        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
+        saver.restore(sess, 'assets/char-rnn-cnn-19999')
+        print('restored')
 
         # Run the initializers for the pipeline
         sess.run([iterator.initializer, iterator_incorrect.initializer, iterator_txt_G.initializer])
@@ -127,8 +127,8 @@ def main():
             if step % 10 == 0:
                 writer.add_summary(fake_img_summary, step)
 
-            # if step % 1000 == 0 or epoch == epochs-1:
-            #     saver.save(sess, 'saved/', global_step=step)
+            if step % 1000 == 0:
+                saver.save(sess, 'saved/', global_step=step)
 
 
     # Close writer when done training
