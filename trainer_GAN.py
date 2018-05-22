@@ -68,8 +68,8 @@ def main():
 
     G_grads =[ (g0_grad + g1_grad) / 2 for (g0_grad, g0_vars), (g1_grad, g1_vars) in zip(G0_grads_vars,G1_grads_vars)]
     D_grads = [ (d0_grad + d1_grad) / 2 for (d0_grad, d0_vars), (d1_grad, d1_vars) in zip(D0_grads_vars,D1_grads_vars)]
-    G_loss = tf.add(G0_loss, G1_loss)
-    D_loss = tf.add(D0_loss, D1_loss)
+    G_loss = (G0_loss + G1_loss) / 2
+    D_loss = (D0_loss + D1_loss) /2
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
@@ -98,42 +98,42 @@ def main():
         datasource.preprocess_data_and_initialize(sess)
         # Run the initializers for the pipeline
 
-        with tf.device('/cpu:0'):
-            for step in range(epochs):
 
-                # Updating the learning rate every 100 epochs (starting after first 1000 update steps)
-                if step != 0 and step > 10000 and (step % decay_every == 0):
-                    sess.run(tf.assign(lr_v, lr_v * lr_decay))
-                    log = " ** new learning rate: %f" % (lr * lr_decay)
-                    print(log)
+        for step in range(epochs):
 
-                # Updates parameters in G and D, only every third time for D
-                if step % 10 == 0:
-                    print('Update: ', step)
-                    summary, dloss, gloss, _, _ = sess.run(
-                        [merged, D_loss, G_loss, D_opt, G_opt])
+            # Updating the learning rate every 100 epochs (starting after first 1000 update steps)
+            if step != 0 and step > 10000 and (step % decay_every == 0):
+                sess.run(tf.assign(lr_v, lr_v * lr_decay))
+                log = " ** new learning rate: %f" % (lr * lr_decay)
+                print(log)
 
-                    print('Discriminator loss: ', dloss)
-                    print('Generator loss: ', gloss)
+            # Updates parameters in G and D, only every third time for D
+            if step % 10 == 0:
+                print('Update: ', step)
+                summary, dloss, gloss, _, _ = sess.run(
+                    [merged, D_loss, G_loss, D_opt, G_opt])
 
-                else:
-                    _, _ = sess.run(
-                        [D_opt, G_opt])
+                print('Discriminator loss: ', dloss)
+                print('Generator loss: ', gloss)
 
-
-                # Tensorboard stuff
-                writer.add_summary(summary, step)
+            else:
+                _, _ = sess.run(
+                    [D_opt, G_opt])
 
 
-                if step % save_every == 0:
-                    saver.save(sess, 'saved/', global_step=step)
+            # Tensorboard stuff
+            writer.add_summary(summary, step)
 
-                if step % 100 == 0:
-                    testset_op(sess, writer, step)
 
-                if step % 1000 == 0:
-                    print('1000 epoch time:', time()-t0)
-                    t0 = time()
+            if step % save_every == 0:
+                saver.save(sess, 'saved/', global_step=step)
+
+            if step % 100 == 0:
+                testset_op(sess, writer, step)
+
+            if step % 1000 == 0:
+                print('1000 epoch time:', time()-t0)
+                t0 = time()
 
 
     # Close writer when done training
@@ -143,10 +143,10 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
-            fake_image = generator_resnet(text_G, enable_res=conf.ENABLE_RESIDUAL_NET)
-            S_r = discriminator_resnet(real_image, text_right, enable_res=conf.ENABLE_RESIDUAL_NET)
-            S_w = discriminator_resnet(real_image2, text_wrong, enable_res=conf.ENABLE_RESIDUAL_NET)
-            S_f = discriminator_resnet(fake_image, text_G, enable_res=conf.ENABLE_RESIDUAL_NET)
+            fake_image = generator_resnet(text_G)
+            S_r = discriminator_resnet(real_image, text_right)
+            S_w = discriminator_resnet(real_image2, text_wrong)
+            S_f = discriminator_resnet(fake_image, text_G)
 
             # Loss functions for G and D
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
@@ -160,6 +160,18 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
     return G_grads_vars, D_grads_vars, G_loss, D_loss
 
+def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
+    txt_in = tf.concat([c1_txt,c2_txt,cg_txt], axis=0)
+    g_img = generator_resnet(cg_txt)
+    img_in = tf.concat([c1_img, c2_img, g_img])
+
+    dout = discriminator_resnet(img_in, txt_in)
+
+    ones = tf.ones_like(dout)
+    zeros = tf.zeros_like(dout)
+    dout_stepped = tf.where(tf.greater(dout, 0.5),ones,zeros)
+
+    pass
 def setup_testset(datasource):
     # Test pipe setup
 

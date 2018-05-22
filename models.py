@@ -42,7 +42,7 @@ def build_char_cnn_rnn(input_seqs):
 
         return out
 
-def generator_resnet(text, enable_res = False, z_size = None):
+def generator_resnet(text, enable_res = conf.ENABLE_RESIDUAL_NET, z_size = None):
 
     with tf.variable_scope('generator_resnet', reuse=tf.AUTO_REUSE):
 
@@ -116,7 +116,7 @@ def generator_resnet(text, enable_res = False, z_size = None):
 
         return net5
 
-def discriminator_resnet(gan_image, text, enable_res = False):
+def discriminator_resnet(gan_image, text, enable_res = conf.ENABLE_RESIDUAL_NET):
     with tf.variable_scope('discriminator_resnet', reuse=tf.AUTO_REUSE):
         m = 128
         ndf = conf.NUM_D_FILTER
