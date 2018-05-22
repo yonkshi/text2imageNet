@@ -22,7 +22,7 @@ def normalize_images(images):
 
     return images
 
-def sample_image_crop_flip(image, output_size=64, scale_size=70, deterministic=False):
+def sample_image_crop_flip(image, output_size=64, scale_size=70, deterministic=False, return_multiple=False):
 
     im = resize_image_with_smallest_side(image, scale_size)
 
@@ -41,7 +41,17 @@ def sample_image_crop_flip(image, output_size=64, scale_size=70, deterministic=F
     crop = random.choice([crop_middle,crop_topleft,crop_topright,crop_bottomright,crop_bottomleft])
     flip_maybe = random.choice([flip,donothing])
 
+    if return_multiple:
+        images = []
+        for crop_op in [crop_middle,crop_topright]:
+            cropped = crop_op(im)
+            images.append(cropped)
+            images.append(flip(cropped))
+        return np.array(images)
+
     if deterministic: return crop_middle(im)
+
+
 
     return flip_maybe(crop(im))
 

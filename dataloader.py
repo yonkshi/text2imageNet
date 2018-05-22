@@ -15,6 +15,7 @@ from os import listdir
 from os.path import isfile, join
 import os
 from time import time
+import time as ttt
 import bisect
 
 from utils import *
@@ -26,9 +27,9 @@ def test_gan_pipeline():
     print('hello world')
 
     l = GanDataLoader()
-    iterator, next, (label, encoded, img) = l.correct_pipe()
-    iterator2, next2, (label2, encoded2, img2) = l.incorrect_pipe()
-    iterator_txt, next_txt, (label3, encoded3, img3) = l.text_only_pipe()
+    iterator, next, (encoded, img) = l.correct_pipe()
+    iterator2, next2, (encoded2, img2) = l.incorrect_pipe() # , (label2, encoded2, img2)
+    #iterator_txt, next_txt, (label3, encoded3, img3) = l.text_only_pipe()
 
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p")
 
@@ -45,19 +46,20 @@ def test_gan_pipeline():
 
         sess.run(iterator.initializer)
         sess.run(iterator2.initializer)
-        sess.run(iterator_txt.initializer)
+        #sess.run(iterator_txt.initializer)
         t0 = time()
-        for i in range(1000):
-            print('run')
-            _, a, i1 = sess.run([next, encoded, img])
-            _, b, i2 = sess.run([next2, encoded2, img2])
-            txt_out = sess.run(encoded3)
+        for i in range(100000):
+
+            #_, a, i1 = sess.run([next, encoded, img])
+            iter, iter2 = sess.run([encoded, encoded2])
+
+           # txt_out = sess.run(encoded3)
+
+            #print(tf.shape(a))
+            print(i)
+            ttt.sleep(0.1)
 
 
-            print(tf.shape(a))
-            print(tf.shape(b))
-            print(tf.shape(txt_out))
-            print('yo')
 
         print('time',time()-t0)
 
@@ -74,9 +76,10 @@ class BaseDataLoader:
 
     def _load_meta_data(self):
         d = {} # entire set
-        test_d = {} # test set only
-        train_d = {} # training set only
+        test_d = [] # test set only
+        train_d = [] # training set only
         t0 = time()
+        print('begin processing metadata')
         for class_str in listdir(self.caption_path):
             if 'class' not in class_str: continue # garbage
             c = int(class_str.split('_')[1])-1  # 0 indexed
@@ -95,15 +98,15 @@ class BaseDataLoader:
 
                     # split set
                     if img_id in self.test_set_idx:
-                        test_set_images.append(img_name)
+                        #test_set_images.append(img_name)
+                        test_d.append((class_str, img_name))
                     else:
-                        train_set_images.append(img_name)
+                        #train_set_images.append(img_name)
+                        train_d.append((class_str, img_name))
+
+
             d[c] = images
 
-            if test_set_images:
-                test_d[c] = test_set_images
-            if train_set_images:
-                train_d[c] = train_set_images
 
         self.meta_data = d
         self.testset_metadata = test_d
@@ -128,6 +131,12 @@ class BaseDataLoader:
         return conf.ALPHABET.find(c)
 
 class GanDataLoader(BaseDataLoader):
+
+    def __init__(self):
+        super(GanDataLoader, self).__init__()
+        self.cached_txt_pipe = None
+        self.cached_img_pipe = None
+        self.datasources = []
 
     def _incorrect_pair(self):
         '''
@@ -219,63 +228,83 @@ class GanDataLoader(BaseDataLoader):
         encoded_caption = build_char_cnn_rnn(caption_rigid)
         return label, encoded_caption, image
 
-    def base_pipe(self, pipe_in, batch_size = conf.GAN_BATCH_SIZE, deterministic=False):
-        pipe = pipe_in.map(lambda label, txt_file, img_file: tf.py_func(self._load_file, [label, txt_file, img_file, deterministic],
-                                                                   [tf.int8, tf.float32, tf.float32]),num_parallel_calls=10)
-        pipe = pipe.prefetch(100)
+
+    # New pipeline methods below ------------------
+    def _load_images(self, metadata):
+        img_file = metadata[1].decode('utf-8') # bytes to string
+        image_path = join(self.image_path, img_file + '.jpg')
+        im = imread(image_path, mode='RGB')
+        images = (sample_image_crop_flip(im, return_multiple=True)- 127.5)/127.5
+        print('encoding_image')
+        return images.astype('float32')
+    def _load_txt(self, metadata):
+        class_name = metadata[0].decode('utf-8')  # bytes to string
+        txt_file = metadata[1].decode('utf-8')  # bytes to string
+        caption_path = join(self.caption_path,class_name,txt_file + '.txt')
+        with open(caption_path, 'r') as txt_file:
+            lines = txt_file.readlines()
+        encoded_caps = [self._onehot_encode_text(line) for line in lines]
+        print('encoding_text')
+        txt = np.array(encoded_caps,dtype='float32')
+        return txt
+    def _encode_txt(self, txt):
+        caption_rigid = tf.reshape(txt,[-1,conf.CHAR_DEPTH, conf.ALPHA_SIZE])
+        encoded_caption = build_char_cnn_rnn(caption_rigid)
+        return encoded_caption
+
+    def base_pipe(self, datasource, batch_size = conf.GAN_BATCH_SIZE, deterministic=False, shuffle_txt = False):
+        source = tf.data.Dataset.from_tensor_slices(datasource)
+
+        # reusable txt pipe
+        images = source.map(lambda metadata: tf.py_func(self._load_images, [metadata],tf.float32),num_parallel_calls=10)
+        images = images.cache() # preloaded all images, saves in memory
+        images = images.repeat()
+
+        # reusable img pipe
+        txt = source.map(lambda metadata: tf.py_func(self._load_txt, [metadata],tf.float32),num_parallel_calls=10)
+        txt = txt.map(self._encode_txt) # single threaded encoder
+        txt = txt.cache() # preloaded all images, cache in memory
+        txt = txt.repeat()
+
+        # Static data ends
+        if shuffle_txt:
+            txt = txt.shuffle(500)
+
+        #  === Aligninig texts and images ==
+
+        # tile it 4 times to match dim of image
+        # expand 0 dim then flat_map to pipe
+        txt = txt.flat_map(lambda t: tf.data.Dataset.from_tensor_slices(tf.tile(t,[4,1])))
+        # tile 10 times to match dim of txt
+        # expand 0 dim then flat_map to pipe
+        images = images.flat_map(lambda t: tf.data.Dataset.from_tensor_slices(tf.tile(t,[10,1,1,1])))
+
+        pipe = tf.data.Dataset.zip((txt, images))
+
+        # If no shuffling before pipeline, pipeline can be cached
+        if not shuffle_txt:
+            pipe = pipe.cache()
+
         pipe = pipe.batch(batch_size)
-        pipe = pipe.map(self._run_encoder)
-        pipe = pipe.prefetch(20)
+        pipe = pipe.prefetch(200)
+        if not deterministic:
+            pipe = pipe.shuffle(8000)
+
 
         pipe_iter = pipe.make_initializable_iterator()
         pipe_next = pipe_iter.get_next()
-        return pipe_iter, pipe_next
+        return pipe_iter, pipe_next, pipe
     def correct_pipe(self):
 
-        correct = tf.data.Dataset.from_generator(self._correct_pair, (tf.int8, tf.string, tf.string))
-        correct_iterator, correct_next = self.base_pipe(correct)
-        (label, encoded_txt, img) = correct_next
-        return correct_iterator, correct_next, (label, encoded_txt, img)
-
+        #correct = tf.data.Dataset.from_generator(self._correct_pair, (tf.int8, tf.string, tf.string))
+        correct_iterator, correct_next, _ = self.base_pipe(datasource=self.trainset_metadata)
+        (encoded_txt, img) = correct_next
+        return correct_iterator, correct_next, (encoded_txt, img)
     def incorrect_pipe(self):
-        incorrect = tf.data.Dataset.from_generator(self._incorrect_pair, (tf.int8, tf.string, tf.string))
-        incorrect_iterator, incorrect_next = self.base_pipe(incorrect)
-        (label, encoded_txt, img) = incorrect_next
-        return incorrect_iterator, incorrect_next, (label, encoded_txt, img)
-
+        incorrect_iterator, incorrect_next, _ = self.base_pipe(datasource=self.trainset_metadata, shuffle_txt=True)
+        (encoded_txt, img) = incorrect_next
+        return incorrect_iterator, incorrect_next, (encoded_txt, img)
     def text_only_pipe(self):
-
-        # def text_gen():
-        #     while True:
-        #         random_class = random.choice(list(self.trainset_metadata.keys()))
-        #         random_file = random.choice(self.trainset_metadata[random_class])
-        #         class_dir = 'class_%05d' % (random_class + 1) # 1 based index for class dir
-        #         cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
-        #
-        #         # Load captions for image
-        #         with open(cap_path, 'r') as txt_file:
-        #             lines = txt_file.readlines()
-        #         line = random.choice(lines)
-        #         txt = np.array(self._onehot_encode_text(line), dtype='float32')
-        #
-        #         yield txt
-        # def do_nothing(txt):
-        #     return txt
-        # def text_encode(caption):
-        #     caption_rigid = tf.reshape(caption, [-1, conf.CHAR_DEPTH, conf.ALPHA_SIZE])
-        #     encoded_caption = build_char_cnn_rnn(caption_rigid)
-        #     return encoded_caption
-        #
-        # txt_pipe = tf.data.Dataset.from_generator(text_gen, tf.float32)
-        #
-        # pipe = txt_pipe.prefetch(100)
-        # pipe = pipe.map(do_nothing)
-        # pipe = pipe.batch(conf.GAN_BATCH_SIZE)
-        # pipe = pipe.map(text_encode)
-        # pipe = pipe.prefetch(20)
-        #
-        # pipe_iter = pipe.make_initializable_iterator()
-        # pipe_next = pipe_iter.get_next()
         return self.correct_pipe()
 
     def test_pipe(self, deterministic=False):
@@ -285,13 +314,9 @@ class GanDataLoader(BaseDataLoader):
         :return:
         '''
         '''spid out two images'''
-        if deterministic:
-            test = tf.data.Dataset.from_generator(self._test_pair_determ, (tf.int8, tf.string, tf.string))
-        else:
-            test = tf.data.Dataset.from_generator(self._test_pair, (tf.int8, tf.string, tf.string))
-        test_iterator, test_next = self.base_pipe(test,batch_size=1, deterministic=deterministic)
-        (label, encoded_txt, img) = test_next
-        return test_iterator, test_next, (label, encoded_txt, img)
+        test_iterator, test_next, pipe = self.base_pipe(datasource=self.testset_metadata[0:3], deterministic=deterministic)
+        (encoded_txt, img) = test_next
+        return test_iterator, test_next, (encoded_txt, img)
 
 
 
