@@ -99,16 +99,26 @@ class BaseDataLoader:
                     # split set
                     if img_id in self.test_set_idx:
                         #test_set_images.append(img_name)
-                        test_d.append((class_str, img_name))
+                        test_d.append([class_str, img_name])
                     else:
                         #train_set_images.append(img_name)
-                        train_d.append((class_str, img_name))
+                        train_d.append([class_str, img_name])
 
 
             d[c] = images
 
         random.shuffle(test_d)
         random.shuffle(train_d)
+
+        test_idx = np.arange(-len(test_d),0)[:,None]
+        train_idx = np.arange(0, len(train_d))[:,None]
+
+        test_d = np.array(test_d)
+        train_d = np.array(train_d)
+
+        test_d = np.hstack([test_d, test_idx])
+        train_d = np.hstack([train_d, train_idx])
+
         self.meta_data = d
         self.testset_metadata = test_d
         self.trainset_metadata = train_d
@@ -236,7 +246,7 @@ class GanDataLoader(BaseDataLoader):
         image_path = join(self.image_path, img_file + '.jpg')
         im = imread(image_path, mode='RGB')
         images = (sample_image_crop_flip(im, return_multiple=True)- 127.5)/127.5
-        print('encoding_image')
+        print('encoding_image', metadata[2].decode('utf-8'))
         return images.astype('float32')
     def _load_txt(self, metadata):
         class_name = metadata[0].decode('utf-8')  # bytes to string
@@ -245,7 +255,7 @@ class GanDataLoader(BaseDataLoader):
         with open(caption_path, 'r') as txt_file:
             lines = txt_file.readlines()
         encoded_caps = [self._onehot_encode_text(line) for line in lines]
-        print('encoding_text')
+        print('encoding_text', metadata[2].decode('utf-8'))
         txt = np.array(encoded_caps,dtype='float32')
         return txt
     def _encode_txt(self, txt):
@@ -253,19 +263,32 @@ class GanDataLoader(BaseDataLoader):
         encoded_caption = build_char_cnn_rnn(caption_rigid)
         return encoded_caption
 
-    def base_pipe(self, datasource, batch_size = conf.GAN_BATCH_SIZE, deterministic=False, shuffle_txt = False):
+    def base_pipe(self, datasource, reuse=False, batch_size = conf.GAN_BATCH_SIZE, deterministic=False, shuffle_txt = False):
         source = tf.data.Dataset.from_tensor_slices(datasource)
 
         # reusable txt pipe
         images = source.map(lambda metadata: tf.py_func(self._load_images, [metadata],tf.float32),num_parallel_calls=10)
         images = images.cache() # preloaded all images, saves in memory
         images = images.repeat()
+        # reuse static image pipe
+        if reuse:
+            if self.cached_img_pipe is None:
+                self.cached_img_pipe = images
+            else:
+                images = self.cached_img_pipe
 
         # reusable img pipe
         txt = source.map(lambda metadata: tf.py_func(self._load_txt, [metadata],tf.float32),num_parallel_calls=10)
         txt = txt.map(self._encode_txt) # single threaded encoder
         txt = txt.cache() # preloaded all images, cache in memory
         txt = txt.repeat()
+
+        # reuse static text pipe
+        if reuse:
+            if self.cached_txt_pipe is None:
+                self.cached_txt_pipe = txt
+            else:
+                txt = self.cached_txt_pipe
 
         # Static data ends
         if shuffle_txt:
