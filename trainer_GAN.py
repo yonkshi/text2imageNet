@@ -11,7 +11,7 @@ import tensorflow as tf
 
 def main():
     """The famous main function that no one knows what it's for"""
-
+    run_title = input('Please name this session:')
     # Training parameters
     epochs = 600_000
     lr = 0.0002
@@ -120,7 +120,7 @@ def main():
     merged = tf.summary.merge_all()
 
     #fake_img_summary_op = tf.summary.image('generated_image', tf.concat([fake_image * 127.5, real_image_G * 127.5], axis=2))
-    run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
+    run_name = run_title + datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
 
     #
