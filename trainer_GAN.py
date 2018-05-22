@@ -19,6 +19,7 @@ def main():
     decay_every = 100000
     save_every = 10000
     beta1 = 0.5
+    force_gpu = False
 
 
     # Parameters for which generator / discriminator to use
@@ -55,15 +56,13 @@ def main():
     text_wrong0, text_wrong1 = split_tensor_for_gpu(text_wrong)
     real_image20, real_image21 = split_tensor_for_gpu(real_image2)
     text_G0, text_G1 = split_tensor_for_gpu(text_G)
-    real_image_G0, real_image_G1 = split_tensor_for_gpu(real_image_G)
+
 
     # Runs on GPU
     G0_grads_vars, D0_grads_vars, G0_loss, D0_loss = loss_tower(0, optimizer, text_G0, real_image0, text_right0, real_image20, text_wrong0)
     G1_grads_vars, D1_grads_vars, G1_loss, D1_loss = loss_tower(1, optimizer, text_G1, real_image1, text_right1, real_image21, text_wrong1)
 
     # # extract vars
-    # G_grads_total = []
-    # ls = G0_grads_vars + G1_grads_vars
     G_vars = [var for grad, var in G0_grads_vars] #G0 and G1 share vars, so doesn't matter
     D_vars = [var for grad, var in D0_grads_vars] # D0 and D1 share vars, so doesn't matter
 
@@ -71,27 +70,6 @@ def main():
     D_grads = [ (d0_grad + d1_grad) / 2 for (d0_grad, d0_vars), (d1_grad, d1_vars) in zip(D0_grads_vars,D1_grads_vars)]
     G_loss = tf.add(G0_loss, G1_loss)
     D_loss = tf.add(D0_loss, D1_loss)
-
-    # # Single GPU stuff
-    # fake_image = generator_resnet(text_G)
-    # S_r = discriminator_resnet(real_image, text_right)
-    # S_w = discriminator_resnet(real_image2, text_wrong)
-    # S_f = discriminator_resnet(fake_image, text_G)
-    #
-    #
-    # # Loss functions for G and D
-    # G_loss = -tf.reduce_mean(tf.log(S_f))
-    # D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2)
-    # tf.summary.scalar('generator_loss', G_loss)
-    # tf.summary.scalar('discriminator_loss', D_loss)
-    #
-    #
-    # # Parameters we want to train, and their gradients
-    # G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=gen_scope)
-    # D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scope)
-    #G_grads = tf.gradients(G_loss, G_vars)
-    #D_grads = tf.gradients(D_loss, D_vars)
-    #
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
@@ -110,8 +88,7 @@ def main():
     # Execute the graph
     testset_op = setup_testset(datasource)
     t0 = time()
-    #with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess: # Allow fall back to CPU
-    with tf.Session() as sess: # Force GPU
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=(not force_gpu))) as sess: # Allow fall back to CPU
 
         sess.run(tf.global_variables_initializer())
         saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
@@ -121,48 +98,42 @@ def main():
         datasource.preprocess_data_and_initialize(sess)
         # Run the initializers for the pipeline
 
+        with tf.device('/cpu:0'):
+            for step in range(epochs):
 
-        for step in range(epochs):
+                # Updating the learning rate every 100 epochs (starting after first 1000 update steps)
+                if step != 0 and step > 10000 and (step % decay_every == 0):
+                    sess.run(tf.assign(lr_v, lr_v * lr_decay))
+                    log = " ** new learning rate: %f" % (lr * lr_decay)
+                    print(log)
 
-            # Updating the learning rate every 100 epochs (starting after first 1000 update steps)
-            if step != 0 and step > 10000 and (step % decay_every == 0):
-                sess.run(tf.assign(lr_v, lr_v * lr_decay))
-                log = " ** new learning rate: %f" % (lr * lr_decay)
-                print(log)
+                # Updates parameters in G and D, only every third time for D
+                if step % 10 == 0:
+                    print('Update: ', step)
+                    summary, dloss, gloss, _, _ = sess.run(
+                        [merged, D_loss, G_loss, D_opt, G_opt])
 
+                    print('Discriminator loss: ', dloss)
+                    print('Generator loss: ', gloss)
 
-            # Updates parameters in G and D, only every third time for D
-            print('Update: ', step)
-            if step % 1 == 0:
-                summary, dloss, gloss, _, _ = sess.run(
-                    [merged, D_loss, G_loss, D_opt, G_opt])
-
-                print('Discriminator loss: ', dloss)
-                print('Generator loss: ', gloss)
-
-            else:
-                summary, gloss, _ = sess.run(
-                    [merged, G_loss, G_opt])
-
-                print('Generator loss: ', gloss)
+                else:
+                    _, _ = sess.run(
+                        [D_opt, G_opt])
 
 
-            # Tensorboard stuff
-            writer.add_summary(summary, step)
+                # Tensorboard stuff
+                writer.add_summary(summary, step)
 
 
-            # if step % 10 == 0:
-            #     writer.add_summary(fake_img_summary, step)
+                if step % save_every == 0:
+                    saver.save(sess, 'saved/', global_step=step)
 
-            if step % save_every == 0:
-                saver.save(sess, 'saved/', global_step=step)
+                if step % 100 == 0:
+                    testset_op(sess, writer, step)
 
-            if step % 100 == 0:
-                testset_op(sess, writer, step)
-
-            if step % 1000 == 0:
-                print('1000 epoch time:', time()-t0)
-                t0 = time()
+                if step % 1000 == 0:
+                    print('1000 epoch time:', time()-t0)
+                    t0 = time()
 
 
     # Close writer when done training
