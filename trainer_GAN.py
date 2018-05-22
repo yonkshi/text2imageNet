@@ -126,8 +126,6 @@ def main():
     #
     # Execute the graph
 
-
-    t0 = time()
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=(not force_gpu))) as sess: # Allow fall back to CPU
 
         sess.run(tf.global_variables_initializer())
@@ -139,7 +137,7 @@ def main():
         datasource.preprocess_data_and_initialize(sess)
         # Run the initializers for the pipeline
 
-
+        t0 = time()
         for step in range(epochs):
 
             # Updating the learning rate every 100 epochs (starting after first 1000 update steps)
@@ -201,7 +199,7 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
 
     txt_in = tf.concat([c1_txt,c2_txt,cg_txt], axis=0)
-    g_img = generator_resnet(cg_txt)
+    g_img = generator_resnet(cg_txt, z_size=conf.GAN_BATCH_SIZE)
     img_in = tf.concat([c1_img, c2_img, g_img], axis=0)
 
     dout = discriminator_resnet(img_in, txt_in)

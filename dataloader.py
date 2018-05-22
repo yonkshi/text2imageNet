@@ -94,7 +94,7 @@ class BaseDataLoader:
             text_path = join(self.caption_path, class_str)
 
             count += 1
-            #if count > 10: break # TODO Delete me
+            #if count > 5: break # TODO Delete me
 
             images = []
             for txt_file in listdir(text_path):
