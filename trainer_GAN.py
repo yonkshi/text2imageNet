@@ -59,20 +59,24 @@ def main():
 
 
     # Runs on GPU
-    G0_grads_vars, D0_grads_vars, G0_loss, D0_loss = loss_tower(0, optimizer, text_G0, real_image0, text_right0, real_image20, text_wrong0)
-    G1_grads_vars, D1_grads_vars, G1_loss, D1_loss = loss_tower(1, optimizer, text_G1, real_image1, text_right1, real_image21, text_wrong1)
+    # G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2, text_wrong)
+    # #G1_grads_vars, D1_grads_vars, G1_loss, D1_loss = loss_tower(1, optimizer, text_G1, real_image1, text_right1, real_image21, text_wrong1)
+    #
+    # # # extract vars
+    # G_vars = [var for grad, var in G0_grads_vars] #G0 and G1 share vars, so doesn't matter
+    # D_vars = [var for grad, var in D0_grads_vars] # D0 and D1 share vars, so doesn't matter
+    #
+    # G_grads =[ (g0_grad + g1_grad) / 2 for (g0_grad, g0_vars), (g1_grad, g1_vars) in zip(G0_grads_vars,G1_grads_vars)]
+    # D_grads = [ (d0_grad + d1_grad) / 2 for (d0_grad, d0_vars), (d1_grad, d1_vars) in zip(D0_grads_vars,D1_grads_vars)]
+    # G_loss = (G0_loss + G1_loss) / 2
+    # D_loss = (D0_loss + D1_loss) /2
 
-    # # extract vars
-    G_vars = [var for grad, var in G0_grads_vars] #G0 and G1 share vars, so doesn't matter
-    D_vars = [var for grad, var in D0_grads_vars] # D0 and D1 share vars, so doesn't matter
+    # Single GPU
+    G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2,
+                                                            text_wrong)
 
-    G_grads =[ (g0_grad + g1_grad) / 2 for (g0_grad, g0_vars), (g1_grad, g1_vars) in zip(G0_grads_vars,G1_grads_vars)]
-    D_grads = [ (d0_grad + d1_grad) / 2 for (d0_grad, d0_vars), (d1_grad, d1_vars) in zip(D0_grads_vars,D1_grads_vars)]
-    G_loss = (G0_loss + G1_loss) / 2
-    D_loss = (D0_loss + D1_loss) /2
-
-    G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
-    D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
+    G_opt = optimizer.apply_gradients(G_grads_vars)
+    D_opt = optimizer.apply_gradients(D_grads_vars)
 
 
     # Write to tensorboard
