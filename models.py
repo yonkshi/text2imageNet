@@ -50,7 +50,11 @@ def generator_resnet(text, enable_res = conf.ENABLE_RESIDUAL_NET, z_size = None)
         ngf = conf.NUM_G_FILTER
         m = conf.ENCODED_TEXT_SIZE
 
-        w_init = tf.random_normal_initializer(stddev=0.02)
+        if enable_res:
+            w_init = tf.random_normal_initializer(stddev=0.02)
+        else:
+            w_init = None
+
         # sample noise
         zz = tf.random_normal((conf.GAN_TOWER_BATCH_SIZE, 100), name='totally_random')
         if z_size is not None: zz = tf.random_normal((z_size, 100))
@@ -120,7 +124,10 @@ def discriminator_resnet(gan_image, text, enable_res = conf.ENABLE_RESIDUAL_NET)
     with tf.variable_scope('discriminator_resnet', reuse=tf.AUTO_REUSE):
         m = 128
         ndf = conf.NUM_D_FILTER
-        w_init = tf.random_normal_initializer(stddev=0.02)
+        if enable_res:
+            w_init = tf.random_normal_initializer(stddev=0.02)
+        else:
+            w_init = None
         # Text input
         #txt = tf.layers.dense(text, m,)
         txt = tf.reshape(tf.layers.dense(text, m), [-1, 1, 1, m])
