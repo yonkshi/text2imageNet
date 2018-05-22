@@ -17,11 +17,6 @@ def main():
     beta1 = 0.5
     force_gpu = True
 
-    hp_str = 'Force_gpu:{}\ndecay_every:{}\ndecay_rate:{}\blearning_rate:{}\nepochs:{}\nforce_gpu:{}'.format(force_gpu,decay_every,decay_every,lr,epochs,force_gpu)
-    outer_string = tf.convert_to_tensor(hp_str)
-    tf.summary.text('configuration', outer_string)
-
-
     # Encoded texts fed from the pipeline
     datasource = GanDataLoader()
     text_right, real_image = datasource.correct_pipe()
@@ -105,6 +100,10 @@ def main():
     tf.summary.scalar('generator_loss', G_loss, family='GAN')
     tf.summary.scalar('discriminator_loss', D_loss, family='GAN')
 
+    hp_str = 'Force_gpu:{}\ndecay_every:{}\ndecay_rate:{}\blearning_rate:{}\nepochs:{}\nforce_gpu:{}'.format(force_gpu,decay_every,decay_every,lr,epochs,force_gpu)
+    outer_string = tf.convert_to_tensor(hp_str)
+    tf.summary.text('configuration', outer_string)
+
     # plot weights
     for var in tf.trainable_variables():
         tf.summary.histogram(var.name, var, family='GAN_internal')
@@ -153,10 +152,12 @@ def main():
                 print('time:', time() - t0 )
                 # Tensorboard stuff
                 writer.add_summary(summary, step)
-
-            else:
+            if step % 2 == 0:
                 _, _ = sess.run(
                     [D_opt, G_opt])
+            else:
+                _ = sess.run(
+                    [G_opt])
 
             if step % save_every == 0:
                 saver.save(sess, 'saved/%s' % run_name, global_step=step)

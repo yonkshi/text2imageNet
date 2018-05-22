@@ -21,7 +21,7 @@ def main():
 
     # Should be 300 maybe
     epochs = 20000
-    lr = 0.0007
+    lr = 0.0002
 
     # raw input
     data = DataLoader()
