@@ -347,7 +347,7 @@ class GanDataLoader(BaseDataLoader):
         txt = tf.data.Dataset.from_tensor_slices(self.preprocessed_text_t)
         # txt = source.map(lambda metadata: tf.py_func(self._load_txt, [metadata],tf.float32),num_parallel_calls=10)
         # txt = txt.map(self._encode_txt) # single threaded encoder
-        txt = txt.cache() # preloaded all images, cache in memory
+        #txt = txt.cache() # preloaded all images, cache in memory
         txt = txt.repeat()
 
         # Static data ends
@@ -365,9 +365,9 @@ class GanDataLoader(BaseDataLoader):
 
         pipe = tf.data.Dataset.zip((txt, images))
 
-        # If no shuffling before pipeline, pipeline can be cached
-        if not shuffle_txt:
-            pipe = pipe.cache()
+        # # If no shuffling before pipeline, pipeline can be cached
+        # if not shuffle_txt:
+        #     pipe = pipe.cache()
 
         if not deterministic:
             pipe = pipe.shuffle(1000)
