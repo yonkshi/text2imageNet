@@ -49,8 +49,6 @@ def main():
     real_image20, real_image21 = split_tensor_for_gpu(real_image2)
     text_G0, text_G1 = split_tensor_for_gpu(text_G)
 
-    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-    D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
     # Runs on GPU
     # G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2, text_wrong)
     # #G1_grads_vars, D1_grads_vars, G1_loss, D1_loss = loss_tower(1, optimizer, text_G1, real_image1, text_right1, real_image21, text_wrong1)
@@ -65,8 +63,9 @@ def main():
     # D_loss = (D0_loss + D1_loss) /2
 
     # Single GPU # TODO SINGLE GPU BEGIN ============
-    G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, G_vars, D_vars, text_G, real_image, text_right, real_image2,
+    G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2,
                                                              text_wrong)
+
 
     G_opt = optimizer.apply_gradients(G_grads_vars)
     D_opt = optimizer.apply_gradients(D_grads_vars)
@@ -175,7 +174,7 @@ def main():
     # Close writer when done training
     writer.close()
 
-def loss_tower(gpu_num, optimizer, G_vars, D_vars, text_G, real_image, text_right, real_image2, text_wrong):
+def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, text_wrong):
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
@@ -188,6 +187,8 @@ def loss_tower(gpu_num, optimizer, G_vars, D_vars, text_G, real_image, text_righ
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
             D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2, name='G_loss_gpu%d' % gpu_num)
 
+            G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+            D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
             # Parameters we want to train, and their gradients
             G_grads_vars = optimizer.compute_gradients(G_loss, G_vars)
             D_grads_vars = optimizer.compute_gradients(D_loss, D_vars)
