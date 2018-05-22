@@ -270,6 +270,13 @@ class GanDataLoader(BaseDataLoader):
         encoded_caption = build_char_cnn_rnn(caption_rigid)
         return encoded_caption
 
+    def _expand_elementwise(self, txt:tf.Tensor):
+        txt = tf.expand_dims(txt, 1)
+        txt = tf.tile(txt,[1,10,1])
+        txt = tf.reshape(txt, [100, 1024])
+        return tf.data.Dataset.from_tensor_slices(txt)
+
+
     def base_pipe(self, datasource, reuse=False, batch_size = conf.GAN_BATCH_SIZE, deterministic=False, shuffle_txt = False):
         images = tf.data.Dataset.from_tensor_slices(self.preprocessed_images_t)
         images = images.repeat()
@@ -285,7 +292,7 @@ class GanDataLoader(BaseDataLoader):
         #  === Aligninig texts and images ==
         # tile it 10 times to match dim of image
         # expand 0 dim then flat_map to pipe
-        txt = txt.flat_map(lambda t: tf.data.Dataset.from_tensor_slices(tf.tile(t,[10,1])))
+        txt = txt.flat_map(self._expand_elementwise)
 
         # tile 10 times to match dim of txt
         # expand 0 dim then flat_map to pipe
