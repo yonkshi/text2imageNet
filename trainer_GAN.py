@@ -19,7 +19,7 @@ def main():
     decay_every = 100_000
     save_every = 10_000
     beta1 = 0.5
-    force_gpu = False
+    force_gpu = True
 
     # Encoded texts fed from the pipeline
     datasource = GanDataLoader()
@@ -146,22 +146,22 @@ def main():
 
 def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, text_wrong):
     # Outputs from G and D
-    #with tf.device('/gpu:%d' % gpu_num):
-    with tf.name_scope('gpu_%d' % gpu_num):
-        fake_image = generator(text_G)
-        S_r = discriminator(real_image, text_right)
-        S_w = discriminator(real_image2, text_wrong)
-        S_f = discriminator(fake_image, text_G)
+    with tf.device('/gpu:%d' % gpu_num):
+        with tf.name_scope('gpu_%d' % gpu_num):
+            fake_image = generator(text_G)
+            S_r = discriminator(real_image, text_right)
+            S_w = discriminator(real_image2, text_wrong)
+            S_f = discriminator(fake_image, text_G)
 
-        # Loss functions for G and D
-        G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
-        D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2, name='G_loss_gpu%d' % gpu_num)
+            # Loss functions for G and D
+            G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
+            D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2, name='G_loss_gpu%d' % gpu_num)
 
-        # Parameters we want to train, and their gradients
-        G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-        D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-        G_grads_vars = optimizer.compute_gradients(G_loss, G_vars)
-        D_grads_vars = optimizer.compute_gradients(D_loss, D_vars)
+            # Parameters we want to train, and their gradients
+            G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+            D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
+            G_grads_vars = optimizer.compute_gradients(G_loss, G_vars)
+            D_grads_vars = optimizer.compute_gradients(D_loss, D_vars)
 
     return G_grads_vars, D_grads_vars, G_loss, D_loss
 
@@ -187,9 +187,9 @@ def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
     c1_accuracy = (1 - tf.count_nonzero(c1) / conf.GAN_BATCH_SIZE) * 100
     c2_accuracy = (1 - tf.count_nonzero(c2) / conf.GAN_BATCH_SIZE) * 100
     cg_accuracy = (1 - tf.count_nonzero(cg) / conf.GAN_BATCH_SIZE) * 100
-    tf.summary.scalar('real_pair_accuracy', c1_accuracy, family='GAN_Accuracy')
-    tf.summary.scalar('wrong_pair_accuracy', c2_accuracy, family='GAN_Accuracy')
-    tf.summary.scalar('fake_pair_accuracy', cg_accuracy, family='GAN_Accuracy')
+    tf.summary.scalar('real_pair_accuracy', c1_accuracy, family='DiscriminatorAccuracy')
+    tf.summary.scalar('wrong_pair_accuracy', c2_accuracy, family='DiscriminatorAccuracy')
+    tf.summary.scalar('fake_pair_accuracy', cg_accuracy, family='DiscriminatorAccuracy')
 
 
 def setup_testset(datasource):
