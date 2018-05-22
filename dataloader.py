@@ -322,11 +322,11 @@ class GanDataLoader(BaseDataLoader):
     def correct_pipe(self):
 
         #correct = tf.data.Dataset.from_generator(self._correct_pair, (tf.int8, tf.string, tf.string))
-        correct_iterator, correct_next, _ = self.base_pipe(datasource=self.trainset_metadata)
+        correct_iterator, correct_next, _ = self.base_pipe(datasource=self.trainset_metadata, reuse=True)
         (encoded_txt, img) = correct_next
         return correct_iterator, correct_next, (encoded_txt, img)
     def incorrect_pipe(self):
-        incorrect_iterator, incorrect_next, _ = self.base_pipe(datasource=self.trainset_metadata, shuffle_txt=True)
+        incorrect_iterator, incorrect_next, _ = self.base_pipe(datasource=self.trainset_metadata, reuse=True, shuffle_txt=True)
         (encoded_txt, img) = incorrect_next
         return incorrect_iterator, incorrect_next, (encoded_txt, img)
     def text_only_pipe(self):
