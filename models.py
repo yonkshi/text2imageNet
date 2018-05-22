@@ -53,7 +53,7 @@ def generator_resnet(text, enable_res = False, z_size = None):
 
 
         # sample noise
-        zz = tf.random_normal((conf.GAN_BATCH_SIZE, 100))
+        zz = tf.random_normal((conf.GAN_TOWER_BATCH_SIZE, 100))
         if z_size is not None: zz = tf.random_normal((z_size, 100))
 
         # Noise concatenated with encoded text

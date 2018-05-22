@@ -107,7 +107,8 @@ class BaseDataLoader:
 
             d[c] = images
 
-
+        random.shuffle(test_d)
+        random.shuffle(train_d)
         self.meta_data = d
         self.testset_metadata = test_d
         self.trainset_metadata = train_d
@@ -268,7 +269,7 @@ class GanDataLoader(BaseDataLoader):
 
         # Static data ends
         if shuffle_txt:
-            txt = txt.shuffle(500)
+            txt = txt.shuffle(100)
 
         #  === Aligninig texts and images ==
 
@@ -285,10 +286,11 @@ class GanDataLoader(BaseDataLoader):
         if not shuffle_txt:
             pipe = pipe.cache()
 
+        if not deterministic:
+            pipe = pipe.shuffle(1000)
+
         pipe = pipe.batch(batch_size)
         pipe = pipe.prefetch(200)
-        if not deterministic:
-            pipe = pipe.shuffle(8000)
 
 
         pipe_iter = pipe.make_initializable_iterator()
@@ -307,14 +309,18 @@ class GanDataLoader(BaseDataLoader):
     def text_only_pipe(self):
         return self.correct_pipe()
 
-    def test_pipe(self, deterministic=False):
+    def test_pipe(self, deterministic=False, sample_size=10):
         '''
 
         :param deterministic: Chooses if the output test is derterministic (defaults to test set 1)
         :return:
         '''
         '''spid out two images'''
-        test_iterator, test_next, pipe = self.base_pipe(datasource=self.testset_metadata[0:3], deterministic=deterministic)
+        if deterministic:
+            ds = self.testset_metadata[0:3]
+        else:
+            ds = self.testset_metadata
+        test_iterator, test_next, pipe = self.base_pipe(datasource=ds,batch_size=sample_size, deterministic=deterministic)
         (encoded_txt, img) = test_next
         return test_iterator, test_next, (encoded_txt, img)
 
