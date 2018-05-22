@@ -64,19 +64,11 @@ def main():
     # # extract vars
     # G_grads_total = []
     # ls = G0_grads_vars + G1_grads_vars
-    G0_grads, G0_vars = [ l[0] for l in G0_grads_vars],[l[1] for l in G0_grads_vars]
-    # G1_grads, G1_vars = [l[0] for l in G1_grads_vars], [l[1] for l in G1_grads_vars]
-    #
-    # G_grads = tf.add(G0_grads,G1_grads)
-    G_vars = G0_vars # Maye the same? since they are shared
-    #
-    # ls = D0_grads_vars + D1_grads_vars
-    #
-    D0_grads, D0_vars = [ l[0] for l in D0_grads_vars],[l[1] for l in D0_grads_vars]
-    # D1_grads, D1_vars = [l[0] for l in D1_grads_vars], [l[1] for l in D1_grads_vars]
-    # D_grads = tf.add(D0_grads, D1_grads)
-    D_vars = D0_vars  # Maye the same? since they are shared
+    G_vars = [var for grad, var in G0_grads_vars] #G0 and G1 share vars, so doesn't matter
+    D_vars = [var for grad, var in D0_grads_vars] # D0 and D1 share vars, so doesn't matter
 
+    G_grads =[ (g0_grad + g1_grad) / 2 for (g0_grad, g0_vars), (g1_grad, g1_vars) in zip(G0_grads_vars,G1_grads_vars)]
+    D_grads = [ (d0_grad + d1_grad) / 2 for (d0_grad, d0_vars), (d1_grad, d1_vars) in zip(D0_grads_vars,D1_grads_vars)]
     G_loss = tf.add(G0_loss, G1_loss)
     D_loss = tf.add(D0_loss, D1_loss)
 
@@ -97,8 +89,8 @@ def main():
     # # Parameters we want to train, and their gradients
     # G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=gen_scope)
     # D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scope)
-    G_grads = tf.gradients(G_loss, G_vars)
-    D_grads = tf.gradients(D_loss, D_vars)
+    #G_grads = tf.gradients(G_loss, G_vars)
+    #D_grads = tf.gradients(D_loss, D_vars)
     #
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))

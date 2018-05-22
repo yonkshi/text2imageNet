@@ -11,7 +11,6 @@ def build_char_cnn_rnn(input_seqs):
         embed_dim = 1024
         alphasize = 70 # like in paper?
 
-
         # 201 x alphasize
         conv1 = tf.layers.conv1d(input_seqs, 384, 4, activation=tf.nn.relu, name='txt_conv1')
         max1 = tf.layers.max_pooling1d(conv1, pool_size=3, name='txt_max1', strides=3)
