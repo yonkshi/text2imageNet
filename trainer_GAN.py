@@ -109,8 +109,8 @@ def main():
     #
     # Execute the graph
     testset_op = setup_testset(datasource)
-    with tf.Session(config=tf.ConfigProto(
-      allow_soft_placement=True)) as sess:
+    #with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess: # Allow fall back to CPU
+    with tf.Session() as sess: # Force GPU
 
         sess.run(tf.global_variables_initializer())
         saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
@@ -132,7 +132,7 @@ def main():
 
             # Updates parameters in G and D, only every third time for D
             print('Update: ', step)
-            if step % 3 == 0:
+            if step % 1 == 0:
                 summary, dloss, gloss, _, _ = sess.run(
                     [merged, D_loss, G_loss, D_opt, G_opt])
 
@@ -167,10 +167,10 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
-            fake_image = generator_resnet(text_G, enable_res=True)
-            S_r = discriminator_resnet(real_image, text_right, enable_res=True)
-            S_w = discriminator_resnet(real_image2, text_wrong, enable_res=True)
-            S_f = discriminator_resnet(fake_image, text_G, enable_res=True)
+            fake_image = generator_resnet(text_G, enable_res=conf.ENABLE_RESIDUAL_NET)
+            S_r = discriminator_resnet(real_image, text_right, enable_res=conf.ENABLE_RESIDUAL_NET)
+            S_w = discriminator_resnet(real_image2, text_wrong, enable_res=conf.ENABLE_RESIDUAL_NET)
+            S_f = discriminator_resnet(fake_image, text_G, enable_res=conf.ENABLE_RESIDUAL_NET)
 
             # Loss functions for G and D
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
