@@ -49,7 +49,8 @@ def main():
     real_image20, real_image21 = split_tensor_for_gpu(real_image2)
     text_G0, text_G1 = split_tensor_for_gpu(text_G)
 
-
+    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+    D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
     # Runs on GPU
     # G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2, text_wrong)
     # #G1_grads_vars, D1_grads_vars, G1_loss, D1_loss = loss_tower(1, optimizer, text_G1, real_image1, text_right1, real_image21, text_wrong1)
@@ -64,41 +65,41 @@ def main():
     # D_loss = (D0_loss + D1_loss) /2
 
     # Single GPU # TODO SINGLE GPU BEGIN ============
-    #G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2,
-    #                                                         text_wrong)
-    #
-    # G_opt = optimizer.apply_gradients(G_grads_vars)
-    # D_opt = optimizer.apply_gradients(D_grads_vars)
+    G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, G_vars, D_vars, text_G, real_image, text_right, real_image2,
+                                                             text_wrong)
+
+    G_opt = optimizer.apply_gradients(G_grads_vars)
+    D_opt = optimizer.apply_gradients(D_grads_vars)
 
 
     # TODO OLD SETUP BEGIN ========
 
     # Outputs from G and D
-    fake_image = generator_resnet(text_G)
-    S_r = discriminator_resnet(real_image, text_right)
-    S_w = discriminator_resnet(real_image2, text_wrong)
-    S_f = discriminator_resnet(fake_image, text_G)
-
-
-    # Loss functions for G and D
-    G_loss = -tf.reduce_mean(tf.log(S_f))
-    D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2)
-    tf.summary.scalar('generator_loss', G_loss)
-    tf.summary.scalar('discriminator_loss', D_loss)
+    # fake_image = generator_resnet(text_G)
+    # S_r = discriminator_resnet(real_image, text_right)
+    # S_w = discriminator_resnet(real_image2, text_wrong)
+    # S_f = discriminator_resnet(fake_image, text_G)
+    #
+    #
+    # # Loss functions for G and D
+    # G_loss = -tf.reduce_mean(tf.log(S_f))
+    # D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2)
+    # tf.summary.scalar('generator_loss', G_loss)
+    # tf.summary.scalar('discriminator_loss', D_loss)
 
 
 
     # Parameters we want to train, and their gradients
-    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-    D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-    G_grads = tf.gradients(G_loss, G_vars)
-    D_grads = tf.gradients(D_loss, D_vars)
+    # G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+    # D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
+    # G_grads = tf.gradients(G_loss, G_vars)
+    # D_grads = tf.gradients(D_loss, D_vars)
 
-    G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
-    D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
+    # G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
+    # D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
+
     # Metrics:
     testset_op = setup_testset(datasource)
-
 
     # Write to tensorboard
     setup_accuracy(text_right, real_image, text_wrong, real_image2, text_G)
@@ -108,9 +109,9 @@ def main():
     # plot weights
     for var in tf.trainable_variables():
         tf.summary.histogram(var.name, var, family='GAN_internal')
-    for grad in G_grads:
+    for grad in G_grads_vars:
         tf.summary.histogram(var.name + '/gradient', grad, family='internal')
-    for grad in D_grads:
+    for grad in D_grads_vars:
         tf.summary.histogram(var.name + '/gradient', grad, family='internal')
 
     merged = tf.summary.merge_all()
@@ -174,7 +175,7 @@ def main():
     # Close writer when done training
     writer.close()
 
-def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, text_wrong):
+def loss_tower(gpu_num, optimizer, G_vars, D_vars, text_G, real_image, text_right, real_image2, text_wrong):
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
@@ -188,8 +189,6 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
             D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2, name='G_loss_gpu%d' % gpu_num)
 
             # Parameters we want to train, and their gradients
-            G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-            D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
             G_grads_vars = optimizer.compute_gradients(G_loss, G_vars)
             D_grads_vars = optimizer.compute_gradients(D_loss, D_vars)
 
