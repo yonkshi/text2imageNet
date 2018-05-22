@@ -287,7 +287,7 @@ class GanDataLoader(BaseDataLoader):
 
         # Static data ends
         if shuffle_txt:
-            txt = txt.shuffle(10000)
+            txt = txt.shuffle(1000)
 
         #  === Aligninig texts and images ==
         # tile it 10 times to match dim of image
@@ -308,7 +308,7 @@ class GanDataLoader(BaseDataLoader):
             pipe = pipe.shuffle(10000)
 
         pipe = pipe.batch(batch_size)
-        pipe = pipe.prefetch(200)
+        pipe = pipe.prefetch(150)
 
 
         pipe_iter = pipe.make_initializable_iterator()

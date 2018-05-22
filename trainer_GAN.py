@@ -162,7 +162,7 @@ def main():
                     [D_opt, G_opt])
 
             if step % save_every == 0:
-                saver.save(sess, 'saved/', global_step=step)
+                saver.save(sess, 'saved/%d' % run_name, global_step=step)
 
 
             if step % 100 == 0:
@@ -197,27 +197,27 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
     return G_grads_vars, D_grads_vars, G_loss, D_loss
 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
+    with tf.device('/gpu:0'):
+        txt_in = tf.concat([c1_txt,c2_txt,cg_txt], axis=0)
+        g_img = generator_resnet(cg_txt, z_size=conf.GAN_BATCH_SIZE)
+        img_in = tf.concat([c1_img, c2_img, g_img], axis=0)
 
-    txt_in = tf.concat([c1_txt,c2_txt,cg_txt], axis=0)
-    g_img = generator_resnet(cg_txt, z_size=conf.GAN_BATCH_SIZE)
-    img_in = tf.concat([c1_img, c2_img, g_img], axis=0)
+        dout = discriminator_resnet(img_in, txt_in)
 
-    dout = discriminator_resnet(img_in, txt_in)
+        dout = tf.reshape(dout, [-1])
+        ones = tf.ones_like(dout)
+        zeros = tf.zeros_like(dout)
+        dout_stepped = tf.where(tf.greater(dout, 0.5),ones,zeros)
 
-    dout = tf.reshape(dout, [-1])
-    ones = tf.ones_like(dout)
-    zeros = tf.zeros_like(dout)
-    dout_stepped = tf.where(tf.greater(dout, 0.5),ones,zeros)
+        labels = tf.concat([tf.ones([conf.GAN_BATCH_SIZE]), tf.zeros([conf.GAN_BATCH_SIZE]), tf.zeros([conf.GAN_BATCH_SIZE])], axis=0)
 
-    labels = tf.concat([tf.ones([conf.GAN_BATCH_SIZE]), tf.zeros([conf.GAN_BATCH_SIZE]), tf.zeros([conf.GAN_BATCH_SIZE])], axis=0)
+        diff = dout_stepped - labels
 
-    diff = dout_stepped - labels
+        c1, c2, cg = tf.split(diff, 3)
 
-    c1, c2, cg = tf.split(diff, 3)
-
-    c1_accuracy = (1 - tf.count_nonzero(c1) / conf.GAN_BATCH_SIZE) * 100
-    c2_accuracy = (1 - tf.count_nonzero(c2) / conf.GAN_BATCH_SIZE) * 100
-    cg_accuracy = (1 - tf.count_nonzero(cg) / conf.GAN_BATCH_SIZE) * 100
+        c1_accuracy = (1 - tf.count_nonzero(c1) / conf.GAN_BATCH_SIZE) * 100
+        c2_accuracy = (1 - tf.count_nonzero(c2) / conf.GAN_BATCH_SIZE) * 100
+        cg_accuracy = (1 - tf.count_nonzero(cg) / conf.GAN_BATCH_SIZE) * 100
     tf.summary.scalar('real_pair_accuracy', c1_accuracy, family='DiscriminatorAccuracy')
     tf.summary.scalar('wrong_pair_accuracy', c2_accuracy, family='DiscriminatorAccuracy')
     tf.summary.scalar('fake_pair_accuracy', cg_accuracy, family='DiscriminatorAccuracy')
