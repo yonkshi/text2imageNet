@@ -133,7 +133,7 @@ def main():
 
             # Updates parameters in G and D, only every third time for D
             print('Update: ', step)
-            if step % 1 == 0:
+            if step % 3 == 0:
                 summary, dloss, gloss, _, _ = sess.run(
                     [merged, D_loss, G_loss, D_opt, G_opt])
 
