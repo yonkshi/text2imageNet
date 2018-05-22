@@ -27,8 +27,8 @@ def test_gan_pipeline():
     print('hello world')
 
     l = GanDataLoader()
-    iterator, next, (encoded, img) = l.correct_pipe()
-    iterator2, next2, (encoded2, img2) = l.incorrect_pipe() # , (label2, encoded2, img2)
+    encoded, img = l.correct_pipe()
+    #iterator2, next2, (encoded2, img2) = l.incorrect_pipe() # , (label2, encoded2, img2)
     #iterator_txt, next_txt, (label3, encoded3, img3) = l.text_only_pipe()
 
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p")
@@ -44,14 +44,20 @@ def test_gan_pipeline():
         saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
         saver.restore(sess, 'assets/char-rnn-cnn-19999')
 
-        sess.run(iterator.initializer)
-        sess.run(iterator2.initializer)
+        l.preprocess_data_and_initialize(sess)
+
+
+
+        print('hey')
+        #sess.run(iterator.initializer)
+        #sess.run(iterator2.initializer)
         #sess.run(iterator_txt.initializer)
         t0 = time()
         for i in range(100000):
 
+
             #_, a, i1 = sess.run([next, encoded, img])
-            iter, iter2 = sess.run([encoded, encoded2])
+            iter, img_ = sess.run([encoded, img])
 
            # txt_out = sess.run(encoded3)
 
@@ -79,17 +85,18 @@ class BaseDataLoader:
         test_d = [] # test set only
         train_d = [] # training set only
         t0 = time()
+        count = 0
         print('begin processing metadata')
         for class_str in listdir(self.caption_path):
             if 'class' not in class_str: continue # garbage
             c = int(class_str.split('_')[1])-1  # 0 indexed
-
             text_path = join(self.caption_path, class_str)
 
+            count += 1
             images = []
-            test_set_images = []
-            train_set_images = []
             for txt_file in listdir(text_path):
+
+
                 if 'image' not in txt_file: continue  # garbage
                 if txt_file.endswith(".txt"):
                     img_name = txt_file.split('.')[0]
@@ -145,9 +152,14 @@ class GanDataLoader(BaseDataLoader):
 
     def __init__(self):
         super(GanDataLoader, self).__init__()
-        self.cached_txt_pipe = None
-        self.cached_img_pipe = None
-        self.datasources = []
+        self.processed_images = []
+        self.processed_txt = []
+        self.trainset_iterators = []
+        self.testset_iterators = []
+        self._encode_txt(tf.random_normal([10,conf.CHAR_DEPTH, conf.ALPHA_SIZE])) # Prebuild encoder
+
+        self.preprocessed_images_t = tf.placeholder(tf.float32, shape=[None,4, 64, 64, 3], name='preprocessed_images_placeholder') # 4 cropped images of 64x64x3
+        self.preprocessed_text_t = tf.placeholder(tf.float32, shape=[None,10, 1024], name='preprocessed_text_placeholder') # 10 captions of 1024 encoded format
 
     def _incorrect_pair(self):
         '''
@@ -239,6 +251,65 @@ class GanDataLoader(BaseDataLoader):
         encoded_caption = build_char_cnn_rnn(caption_rigid)
         return label, encoded_caption, image
 
+    def preprocess_data_and_initialize(self,sess):
+        print('preprocessing training data')
+        train_preproc_images, train_preproc_txt = self._preprocess_data(sess, self.trainset_metadata)
+
+        sess.run(self.trainset_iterators, feed_dict={self.preprocessed_images_t: train_preproc_images,
+                                                  self.preprocessed_text_t: train_preproc_txt})
+        print('preprocessing test data')
+        test_preproc_images, test_preproc_txt = self._preprocess_data(sess, self.testset_metadata)
+        sess.run(self.testset_iterators, feed_dict={self.preprocessed_images_t: test_preproc_images,
+                                                  self.preprocessed_text_t: test_preproc_txt})
+
+    def _preprocess_data(self,  sess, datasource):
+        data_size= len(datasource)
+        source = tf.data.Dataset.from_tensor_slices(datasource)
+        images = source.map(lambda metadata: tf.py_func(self._load_images, [metadata], tf.float32),
+                            num_parallel_calls=20)
+        images = images.prefetch(100)
+
+        txt = source.map(lambda metadata: tf.py_func(self._load_txt, [metadata],tf.float32),num_parallel_calls=20)
+        txt = txt.map(self._encode_txt)
+        txt = txt.prefetch(100)
+
+        #
+        img_iter = images.make_initializable_iterator()
+        image_batches = img_iter.get_next()
+        sess.run(img_iter.initializer)
+
+        txt_iter = txt.make_initializable_iterator()
+        txt_batches = txt_iter.get_next()
+        sess.run(txt_iter.initializer)
+
+        processed_images = []
+        processed_txt = []
+        print('preprocesing images...')
+        c = 0
+        while True:
+            c += 1
+            try:
+                img = sess.run(image_batches)
+            except tf.errors.OutOfRangeError:
+                break
+
+            processed_images.append(img)
+            if c % 100 == 0:
+                print(c, '/', data_size)
+
+        print('preprocesing text')
+        c = 0
+        while True:
+            c += 1
+            try:
+                txt = sess.run(txt_batches)
+            except tf.errors.OutOfRangeError:
+                break
+            processed_txt.append(txt)
+            if c % 100 == 0:
+                print(c, '/', data_size)
+
+        return np.array(processed_images), np.array(processed_txt)
 
     # New pipeline methods below ------------------
     def _load_images(self, metadata):
@@ -246,7 +317,7 @@ class GanDataLoader(BaseDataLoader):
         image_path = join(self.image_path, img_file + '.jpg')
         im = imread(image_path, mode='RGB')
         images = (sample_image_crop_flip(im, return_multiple=True)- 127.5)/127.5
-        print('encoding_image', metadata[2].decode('utf-8'))
+        #print('encoding_image', metadata[2].decode('utf-8'))
         return images.astype('float32')
     def _load_txt(self, metadata):
         class_name = metadata[0].decode('utf-8')  # bytes to string
@@ -255,7 +326,7 @@ class GanDataLoader(BaseDataLoader):
         with open(caption_path, 'r') as txt_file:
             lines = txt_file.readlines()
         encoded_caps = [self._onehot_encode_text(line) for line in lines]
-        print('encoding_text', metadata[2].decode('utf-8'))
+        #print('encoding_text', metadata[2].decode('utf-8'))
         txt = np.array(encoded_caps,dtype='float32')
         return txt
     def _encode_txt(self, txt):
@@ -264,31 +335,20 @@ class GanDataLoader(BaseDataLoader):
         return encoded_caption
 
     def base_pipe(self, datasource, reuse=False, batch_size = conf.GAN_BATCH_SIZE, deterministic=False, shuffle_txt = False):
-        source = tf.data.Dataset.from_tensor_slices(datasource)
-
-        # reusable txt pipe
-        images = source.map(lambda metadata: tf.py_func(self._load_images, [metadata],tf.float32),num_parallel_calls=10)
-        images = images.cache() # preloaded all images, saves in memory
+        # source = tf.data.Dataset.from_tensor_slices(datasource)
+        #
+        # # reusable txt pipe
+        # images = source.map(lambda metadata: tf.py_func(self._load_images, [metadata],tf.float32),num_parallel_calls=10)
+        # images = images.cache() # preloaded all images, saves in memory
+        images = tf.data.Dataset.from_tensor_slices(self.preprocessed_images_t)
         images = images.repeat()
-        # reuse static image pipe
-        if reuse:
-            if self.cached_img_pipe is None:
-                self.cached_img_pipe = images
-            else:
-                images = self.cached_img_pipe
 
         # reusable img pipe
-        txt = source.map(lambda metadata: tf.py_func(self._load_txt, [metadata],tf.float32),num_parallel_calls=10)
-        txt = txt.map(self._encode_txt) # single threaded encoder
+        txt = tf.data.Dataset.from_tensor_slices(self.preprocessed_text_t)
+        # txt = source.map(lambda metadata: tf.py_func(self._load_txt, [metadata],tf.float32),num_parallel_calls=10)
+        # txt = txt.map(self._encode_txt) # single threaded encoder
         txt = txt.cache() # preloaded all images, cache in memory
         txt = txt.repeat()
-
-        # reuse static text pipe
-        if reuse:
-            if self.cached_txt_pipe is None:
-                self.cached_txt_pipe = txt
-            else:
-                txt = self.cached_txt_pipe
 
         # Static data ends
         if shuffle_txt:
@@ -320,15 +380,16 @@ class GanDataLoader(BaseDataLoader):
         pipe_next = pipe_iter.get_next()
         return pipe_iter, pipe_next, pipe
     def correct_pipe(self):
-
         #correct = tf.data.Dataset.from_generator(self._correct_pair, (tf.int8, tf.string, tf.string))
         correct_iterator, correct_next, _ = self.base_pipe(datasource=self.trainset_metadata, reuse=True)
         (encoded_txt, img) = correct_next
-        return correct_iterator, correct_next, (encoded_txt, img)
+        self.trainset_iterators.append(correct_iterator.initializer)
+        return encoded_txt, img
     def incorrect_pipe(self):
         incorrect_iterator, incorrect_next, _ = self.base_pipe(datasource=self.trainset_metadata, reuse=True, shuffle_txt=True)
         (encoded_txt, img) = incorrect_next
-        return incorrect_iterator, incorrect_next, (encoded_txt, img)
+        self.trainset_iterators.append(incorrect_iterator.initializer)
+        return encoded_txt, img
     def text_only_pipe(self):
         return self.correct_pipe()
 
@@ -345,7 +406,9 @@ class GanDataLoader(BaseDataLoader):
             ds = self.testset_metadata
         test_iterator, test_next, pipe = self.base_pipe(datasource=ds,batch_size=sample_size, deterministic=deterministic)
         (encoded_txt, img) = test_next
-        return test_iterator, test_next, (encoded_txt, img)
+
+        self.testset_iterators.append(test_iterator.initializer)
+        return encoded_txt, img
 
 
 

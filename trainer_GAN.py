@@ -34,9 +34,9 @@ def main():
 
     # Encoded texts fed from the pipeline
     datasource = GanDataLoader()
-    iterator, next, (text_right, real_image) = datasource.correct_pipe()
-    iterator_incorrect, next_incorrect, (text_wrong, real_image2) = datasource.incorrect_pipe()
-    iterator_txt_G, next_txt_G, (text_G, real_image_G) = datasource.text_only_pipe()
+    text_right, real_image = datasource.correct_pipe()
+    text_wrong, real_image2 = datasource.incorrect_pipe()
+    text_G, real_image_G = datasource.text_only_pipe()
 
 
     # This is to be able to change the learning rate while training
@@ -61,15 +61,21 @@ def main():
     G0_grads_vars, D0_grads_vars, G0_loss, D0_loss = loss_tower(0, optimizer, text_G0, real_image0, text_right0, real_image20, text_wrong0)
     G1_grads_vars, D1_grads_vars, G1_loss, D1_loss = loss_tower(1, optimizer, text_G1, real_image1, text_right1, real_image21, text_wrong1)
 
-    # extract vars
-    G_grads_total = []
-    ls = G0_grads_vars + G1_grads_vars
-    G_grads, G_vars = [ l[0] for l in ls],[l[1] for l in ls]
-
-
-    ls = D0_grads_vars + D1_grads_vars
-    D_grads, D_vars = [ l[0] for l in ls],[l[1] for l in ls]
-    #D_grads = tf.add(D_grads_total)
+    # # extract vars
+    # G_grads_total = []
+    # ls = G0_grads_vars + G1_grads_vars
+    G0_grads, G0_vars = [ l[0] for l in G0_grads_vars],[l[1] for l in G0_grads_vars]
+    # G1_grads, G1_vars = [l[0] for l in G1_grads_vars], [l[1] for l in G1_grads_vars]
+    #
+    # G_grads = tf.add(G0_grads,G1_grads)
+    G_vars = G0_vars # Maye the same? since they are shared
+    #
+    # ls = D0_grads_vars + D1_grads_vars
+    #
+    D0_grads, D0_vars = [ l[0] for l in D0_grads_vars],[l[1] for l in D0_grads_vars]
+    # D1_grads, D1_vars = [l[0] for l in D1_grads_vars], [l[1] for l in D1_grads_vars]
+    # D_grads = tf.add(D0_grads, D1_grads)
+    D_vars = D0_vars  # Maye the same? since they are shared
 
     G_loss = tf.add(G0_loss, G1_loss)
     D_loss = tf.add(D0_loss, D1_loss)
@@ -91,8 +97,8 @@ def main():
     # # Parameters we want to train, and their gradients
     # G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=gen_scope)
     # D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scope)
-    # G_grads = tf.gradients(G_loss, G_vars)
-    # D_grads = tf.gradients(D_loss, D_vars)
+    G_grads = tf.gradients(G_loss, G_vars)
+    D_grads = tf.gradients(D_loss, D_vars)
     #
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
@@ -119,8 +125,9 @@ def main():
         saver.restore(sess, 'assets/char-rnn-cnn-19999')
         print('restored')
 
+        datasource.preprocess_data_and_initialize(sess)
         # Run the initializers for the pipeline
-        sess.run([iterator.initializer, iterator_incorrect.initializer, iterator_txt_G.initializer])
+
 
         for step in range(epochs):
 
@@ -190,7 +197,7 @@ def setup_testset(datasource):
 
     # Non-derterministic
     sample_size = 10
-    iter_test1, next_test1, (test_nondeter_txt, test_nondeter_img) = datasource.test_pipe(deterministic=False, sample_size = sample_size)
+    test_nondeter_txt, test_nondeter_img = datasource.test_pipe(deterministic=False, sample_size = sample_size)
 
     test_batch_G_img = generator_resnet(test_nondeter_txt,  z_size=sample_size)
     img = tf.concat([test_batch_G_img * 127.5, test_nondeter_img * 127.5], axis=2)
@@ -198,7 +205,6 @@ def setup_testset(datasource):
 
     # To be run inside a session
     def testset_op(sess, writer, step):
-        sess.run(iter_test1.initializer)
         test_batch_summary = sess.run(test_batch_summary_op)
         writer.add_summary(test_batch_summary, step)
 
