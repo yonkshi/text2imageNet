@@ -21,6 +21,11 @@ def main():
     beta1 = 0.5
     force_gpu = True
 
+    hp_str = 'Force_gpu:{}\ndecay_every:{}\ndecay_rate:{}\blearning_rate:{}\nepochs:{}\nforce_gpu:{}'.format(force_gpu,decay_every,decay_every,lr,epochs,force_gpu)
+    outer_string = tf.convert_to_tensor(hp_str)
+    tf.summary.text('configuration', outer_string)
+
+
     # Encoded texts fed from the pipeline
     datasource = GanDataLoader()
     text_right, real_image = datasource.correct_pipe()
@@ -31,8 +36,6 @@ def main():
     # This is to be able to change the learning rate while training
     with tf.variable_scope('learning_rate'):
         lr_v = tf.Variable(lr, trainable=False)
-
-
     # Optimizers
     optimizer = tf.train.AdamOptimizer(learning_rate=lr_v, beta1=beta1)
     def split_tensor_for_gpu(t):
@@ -175,10 +178,10 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
-            fake_image = generator(text_G)
-            S_r = discriminator(real_image, text_right)
-            S_w = discriminator(real_image2, text_wrong)
-            S_f = discriminator(fake_image, text_G)
+            fake_image = generator_resnet(text_G)
+            S_r = discriminator_resnet(real_image, text_right)
+            S_w = discriminator_resnet(real_image2, text_wrong)
+            S_f = discriminator_resnet(fake_image, text_G)
 
             # Loss functions for G and D
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
@@ -195,10 +198,10 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
 
     txt_in = tf.concat([c1_txt,c2_txt,cg_txt], axis=0)
-    g_img = generator(cg_txt)
+    g_img = generator_resnet(cg_txt)
     img_in = tf.concat([c1_img, c2_img, g_img], axis=0)
 
-    dout = discriminator(img_in, txt_in)
+    dout = discriminator_resnet(img_in, txt_in)
 
     dout = tf.reshape(dout, [-1])
     ones = tf.ones_like(dout)
@@ -226,7 +229,7 @@ def setup_testset(datasource):
     sample_size = 10
     test_nondeter_txt, test_nondeter_img = datasource.test_pipe(deterministic=False, sample_size = sample_size)
 
-    test_batch_G_img = generator(test_nondeter_txt,  z_size=sample_size)
+    test_batch_G_img = generator_resnet(test_nondeter_txt,  z_size=sample_size)
     img = tf.concat([test_batch_G_img * 127.5, test_nondeter_img * 127.5], axis=2)
     test_batch_summary_op = tf.summary.image('test_batch', img, family='test_images', max_outputs=10)
 
