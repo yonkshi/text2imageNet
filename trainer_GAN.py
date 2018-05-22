@@ -1,11 +1,7 @@
-import datetime
 from models import *
-from lenet.pretrained import generated_lenet
 from dataloader import *
-from scipy.ndimage import imread
-import matplotlib.pyplot as plt
 import conf
-from utils import *
+
 import tensorflow as tf
 
 
@@ -162,7 +158,7 @@ def main():
                     [D_opt, G_opt])
 
             if step % save_every == 0:
-                saver.save(sess, 'saved/%d' % run_name, global_step=step)
+                saver.save(sess, 'saved/%s' % run_name, global_step=step)
 
 
             if step % 100 == 0:
