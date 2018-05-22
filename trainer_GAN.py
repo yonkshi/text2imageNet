@@ -13,11 +13,11 @@ def main():
     """The famous main function that no one knows what it's for"""
 
     # Training parameters
-    epochs = 60000
+    epochs = 600000
     lr = 0.0002
     lr_decay = 0.5
-    decay_every = 10000
-    save_every = 1000
+    decay_every = 100000
+    save_every = 10000
     beta1 = 0.5
 
 
@@ -109,6 +109,7 @@ def main():
     #
     # Execute the graph
     testset_op = setup_testset(datasource)
+    t0 = time()
     #with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess: # Allow fall back to CPU
     with tf.Session() as sess: # Force GPU
 
@@ -156,8 +157,12 @@ def main():
             if step % save_every == 0:
                 saver.save(sess, 'saved/', global_step=step)
 
-            if step % 10 == 0:
+            if step % 100 == 0:
                 testset_op(sess, writer, step)
+
+            if step % 1000 == 0:
+                print('1000 epoch time:', time()-t0)
+                t0 = time()
 
 
     # Close writer when done training
