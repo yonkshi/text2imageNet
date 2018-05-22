@@ -37,6 +37,7 @@ def test_gan_pipeline():
     var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='text_encoder')
 
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name)
+
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
@@ -93,6 +94,8 @@ class BaseDataLoader:
             text_path = join(self.caption_path, class_str)
 
             count += 1
+            #if count > 10: break # TODO Delete me
+
             images = []
             for txt_file in listdir(text_path):
 
@@ -158,69 +161,8 @@ class GanDataLoader(BaseDataLoader):
         self.testset_iterators = []
         self._encode_txt(tf.random_normal([10,conf.CHAR_DEPTH, conf.ALPHA_SIZE])) # Prebuild encoder
 
-        self.preprocessed_images_t = tf.placeholder(tf.float32, shape=[None,4, 64, 64, 3], name='preprocessed_images_placeholder') # 4 cropped images of 64x64x3
+        self.preprocessed_images_t = tf.placeholder(tf.float32, shape=[None,10, 64, 64, 3], name='preprocessed_images_placeholder') # 4 cropped images of 64x64x3
         self.preprocessed_text_t = tf.placeholder(tf.float32, shape=[None,10, 1024], name='preprocessed_text_placeholder') # 10 captions of 1024 encoded format
-
-    def _incorrect_pair(self):
-        '''
-        Infinite Generator that generates a sample from incorrect pair of text and image
-        :return:
-        '''
-        random_caption_file = 'haha'
-        random_image_file = 'hoho'
-        while True:
-            # sample caption
-            caption_class = random.choice(list(self.trainset_metadata.keys()))
-            random_caption_file = random.choice(self.trainset_metadata[caption_class])
-
-            # sample images
-            rand_img_cls = random.choice(list(self.trainset_metadata.keys()))
-            random_image_file = random.choice(self.trainset_metadata[rand_img_cls])
-
-            # bad condition
-            if(random_caption_file == random_image_file): continue
-            class_dir = 'class_%05d' % (caption_class + 1) # 1 based index for class dir
-            cap_path = os.path.join(self.caption_path,class_dir, random_caption_file + '.txt')
-            img_path = os.path.join(self.image_path, random_image_file + '.jpg')
-            yield 0, cap_path, img_path
-
-    def _correct_pair(self):
-        '''
-        Randomly samples a correct pair of images from the pipeline
-        :return:
-        '''
-
-        while True:
-            # sample caption
-            random_class = random.choice(list(self.trainset_metadata.keys()))
-            random_file = random.choice(self.trainset_metadata[random_class])
-            class_dir = 'class_%05d' % (random_class + 1) # 1 based index for class dir
-            cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
-            img_path = os.path.join(self.image_path, random_file + '.jpg')
-            yield 1, cap_path, img_path
-
-    def _test_pair_determ(self):
-        while True:
-            # sample caption
-
-            cls = list(self.testset_metadata.keys())[0]
-            random_file = self.trainset_metadata[cls][0]  # second class
-
-            class_dir = 'class_%05d' % (cls + 1) # 1 based index for class dir
-            cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
-            img_path = os.path.join(self.image_path, random_file + '.jpg')
-            yield 1, cap_path, img_path
-
-    def _test_pair(self):
-        while True:
-            # sample caption
-            cls = random.choice(list(self.testset_metadata.keys()))
-            random_file = random.choice(self.trainset_metadata[cls])
-
-            class_dir = 'class_%05d' % (cls + 1) # 1 based index for class dir
-            cap_path = os.path.join(self.caption_path, class_dir, random_file + '.txt')
-            img_path = os.path.join(self.image_path, random_file + '.jpg')
-            yield 1, cap_path, img_path
 
     def _load_file(self, label, caption_path, image_path, deterministic=False):
         '''
@@ -246,10 +188,6 @@ class GanDataLoader(BaseDataLoader):
 
         return label, txt, resized_images.astype('float32')
 
-    def _run_encoder(self, label, caption, image):
-        caption_rigid = tf.reshape(caption,[-1,conf.CHAR_DEPTH, conf.ALPHA_SIZE])
-        encoded_caption = build_char_cnn_rnn(caption_rigid)
-        return label, encoded_caption, image
 
     def preprocess_data_and_initialize(self,sess):
         print('preprocessing training data')
@@ -317,7 +255,6 @@ class GanDataLoader(BaseDataLoader):
         image_path = join(self.image_path, img_file + '.jpg')
         im = imread(image_path, mode='RGB')
         images = (sample_image_crop_flip(im, return_multiple=True)- 127.5)/127.5
-        #print('encoding_image', metadata[2].decode('utf-8'))
         return images.astype('float32')
     def _load_txt(self, metadata):
         class_name = metadata[0].decode('utf-8')  # bytes to string
@@ -326,7 +263,6 @@ class GanDataLoader(BaseDataLoader):
         with open(caption_path, 'r') as txt_file:
             lines = txt_file.readlines()
         encoded_caps = [self._onehot_encode_text(line) for line in lines]
-        #print('encoding_text', metadata[2].decode('utf-8'))
         txt = np.array(encoded_caps,dtype='float32')
         return txt
     def _encode_txt(self, txt):
@@ -335,30 +271,22 @@ class GanDataLoader(BaseDataLoader):
         return encoded_caption
 
     def base_pipe(self, datasource, reuse=False, batch_size = conf.GAN_BATCH_SIZE, deterministic=False, shuffle_txt = False):
-        # source = tf.data.Dataset.from_tensor_slices(datasource)
-        #
-        # # reusable txt pipe
-        # images = source.map(lambda metadata: tf.py_func(self._load_images, [metadata],tf.float32),num_parallel_calls=10)
-        # images = images.cache() # preloaded all images, saves in memory
         images = tf.data.Dataset.from_tensor_slices(self.preprocessed_images_t)
         images = images.repeat()
 
         # reusable img pipe
         txt = tf.data.Dataset.from_tensor_slices(self.preprocessed_text_t)
-        # txt = source.map(lambda metadata: tf.py_func(self._load_txt, [metadata],tf.float32),num_parallel_calls=10)
-        # txt = txt.map(self._encode_txt) # single threaded encoder
-        #txt = txt.cache() # preloaded all images, cache in memory
         txt = txt.repeat()
 
         # Static data ends
         if shuffle_txt:
-            txt = txt.shuffle(100)
+            txt = txt.shuffle(10000)
 
         #  === Aligninig texts and images ==
-
-        # tile it 4 times to match dim of image
+        # tile it 10 times to match dim of image
         # expand 0 dim then flat_map to pipe
-        txt = txt.flat_map(lambda t: tf.data.Dataset.from_tensor_slices(tf.tile(t,[4,1])))
+        txt = txt.flat_map(lambda t: tf.data.Dataset.from_tensor_slices(tf.tile(t,[10,1])))
+
         # tile 10 times to match dim of txt
         # expand 0 dim then flat_map to pipe
         images = images.flat_map(lambda t: tf.data.Dataset.from_tensor_slices(tf.tile(t,[10,1,1,1])))
@@ -370,7 +298,7 @@ class GanDataLoader(BaseDataLoader):
         #     pipe = pipe.cache()
 
         if not deterministic:
-            pipe = pipe.shuffle(1000)
+            pipe = pipe.shuffle(10000)
 
         pipe = pipe.batch(batch_size)
         pipe = pipe.prefetch(200)

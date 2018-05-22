@@ -21,18 +21,6 @@ def main():
     beta1 = 0.5
     force_gpu = False
 
-
-    # Parameters for which generator / discriminator to use
-    gen_scope = 'generator'
-    disc_scope = 'discriminator'
-    #gen_scope = 'generator_res'
-    #disc_scope = 'discriminator_res'
-
-
-    # Placeholder for the noise that the generator uses to produce a synthesized image
-    #z = tf.placeholder('float32', [conf.GAN_TOWER_BATCH_SIZE, 100], name='noise')
-
-
     # Encoded texts fed from the pipeline
     datasource = GanDataLoader()
     text_right, real_image = datasource.correct_pipe()
@@ -78,10 +66,23 @@ def main():
     G_opt = optimizer.apply_gradients(G_grads_vars)
     D_opt = optimizer.apply_gradients(D_grads_vars)
 
+    # Metrics:
+    testset_op = setup_testset(datasource)
+
 
     # Write to tensorboard
+    setup_accuracy(text_right, real_image, text_wrong, real_image2, text_G)
     tf.summary.scalar('generator_loss', G_loss, family='GAN')
     tf.summary.scalar('discriminator_loss', D_loss, family='GAN')
+
+    # plot weights
+    for var in tf.trainable_variables():
+        tf.summary.histogram(var.name, var, family='GAN_internal')
+    for grad, var in G_grads_vars:
+        tf.summary.histogram(var.name + '/gradient', grad, family='GAN_internal')
+    for grad, var in D_grads_vars:
+        tf.summary.histogram(var.name + '/gradient', grad, family='GAN_internal')
+
     merged = tf.summary.merge_all()
 
     #fake_img_summary_op = tf.summary.image('generated_image', tf.concat([fake_image * 127.5, real_image_G * 127.5], axis=2))
@@ -90,7 +91,8 @@ def main():
 
     #
     # Execute the graph
-    testset_op = setup_testset(datasource)
+
+
     t0 = time()
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=(not force_gpu))) as sess: # Allow fall back to CPU
 
@@ -98,6 +100,7 @@ def main():
         saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
         saver.restore(sess, 'assets/char-rnn-cnn-19999')
         print('restored')
+
 
         datasource.preprocess_data_and_initialize(sess)
         # Run the initializers for the pipeline
@@ -119,18 +122,16 @@ def main():
 
                 print('Discriminator loss: ', dloss)
                 print('Generator loss: ', gloss)
+                # Tensorboard stuff
+                writer.add_summary(summary, step)
 
             else:
                 _, _ = sess.run(
                     [D_opt, G_opt])
 
-
-            # Tensorboard stuff
-            writer.add_summary(summary, step)
-
-
             if step % save_every == 0:
                 saver.save(sess, 'saved/', global_step=step)
+
 
             if step % 100 == 0:
                 testset_op(sess, writer, step)
@@ -147,10 +148,10 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
-            fake_image = generator_resnet(text_G)
-            S_r = discriminator_resnet(real_image, text_right)
-            S_w = discriminator_resnet(real_image2, text_wrong)
-            S_f = discriminator_resnet(fake_image, text_G)
+            fake_image = generator(text_G)
+            S_r = discriminator(real_image, text_right)
+            S_w = discriminator(real_image2, text_wrong)
+            S_f = discriminator(fake_image, text_G)
 
             # Loss functions for G and D
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
@@ -165,17 +166,32 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
     return G_grads_vars, D_grads_vars, G_loss, D_loss
 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
+
     txt_in = tf.concat([c1_txt,c2_txt,cg_txt], axis=0)
-    g_img = generator_resnet(cg_txt)
-    img_in = tf.concat([c1_img, c2_img, g_img])
+    g_img = generator(cg_txt)
+    img_in = tf.concat([c1_img, c2_img, g_img], axis=0)
 
-    dout = discriminator_resnet(img_in, txt_in)
+    dout = discriminator(img_in, txt_in)
 
+    dout = tf.reshape(dout, [-1])
     ones = tf.ones_like(dout)
     zeros = tf.zeros_like(dout)
     dout_stepped = tf.where(tf.greater(dout, 0.5),ones,zeros)
 
-    pass
+    labels = tf.concat([tf.ones([conf.GAN_BATCH_SIZE]), tf.zeros([conf.GAN_BATCH_SIZE]), tf.zeros([conf.GAN_BATCH_SIZE])], axis=0)
+
+    diff = dout_stepped - labels
+
+    c1, c2, cg = tf.split(diff, 3)
+
+    c1_accuracy = (1 - tf.count_nonzero(c1) / conf.GAN_BATCH_SIZE) * 100
+    c2_accuracy = (1 - tf.count_nonzero(c2) / conf.GAN_BATCH_SIZE) * 100
+    cg_accuracy = (1 - tf.count_nonzero(cg) / conf.GAN_BATCH_SIZE) * 100
+    tf.summary.scalar('real_pair_accuracy', c1_accuracy, family='GAN_Accuracy')
+    tf.summary.scalar('wrong_pair_accuracy', c2_accuracy, family='GAN_Accuracy')
+    tf.summary.scalar('fake_pair_accuracy', cg_accuracy, family='GAN_Accuracy')
+
+
 def setup_testset(datasource):
     # Test pipe setup
 
@@ -183,7 +199,7 @@ def setup_testset(datasource):
     sample_size = 10
     test_nondeter_txt, test_nondeter_img = datasource.test_pipe(deterministic=False, sample_size = sample_size)
 
-    test_batch_G_img = generator_resnet(test_nondeter_txt,  z_size=sample_size)
+    test_batch_G_img = generator(test_nondeter_txt,  z_size=sample_size)
     img = tf.concat([test_batch_G_img * 127.5, test_nondeter_img * 127.5], axis=2)
     test_batch_summary_op = tf.summary.image('test_batch', img, family='test_images', max_outputs=10)
 

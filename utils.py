@@ -43,7 +43,7 @@ def sample_image_crop_flip(image, output_size=64, scale_size=70, deterministic=F
 
     if return_multiple:
         images = []
-        for crop_op in [crop_middle,crop_topright]:
+        for crop_op in [crop_middle,crop_topleft,crop_topright,crop_bottomright,crop_bottomleft]:
             cropped = crop_op(im)
             images.append(cropped)
             images.append(flip(cropped))

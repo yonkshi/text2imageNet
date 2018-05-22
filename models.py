@@ -52,7 +52,7 @@ def generator_resnet(text, enable_res = conf.ENABLE_RESIDUAL_NET, z_size = None)
 
 
         # sample noise
-        zz = tf.random_normal((conf.GAN_TOWER_BATCH_SIZE, 100))
+        zz = tf.random_normal((conf.GAN_TOWER_BATCH_SIZE, 100), name='totally_random')
         if z_size is not None: zz = tf.random_normal((z_size, 100))
 
         # Noise concatenated with encoded text
@@ -184,7 +184,7 @@ def discriminator_resnet(gan_image, text, enable_res = conf.ENABLE_RESIDUAL_NET)
 
     return dnet
 
-def generator(text, z):
+def generator(text, z_size=None):
 
     """
     Generator network
@@ -193,10 +193,13 @@ def generator(text, z):
     :return: synthesized network        ~ batch_size x 64 x 64 x 3
     """
 
-    with tf.variable_scope('generator'):
+    with tf.variable_scope('generator', reuse=tf.AUTO_REUSE):
 
         # side length of input to first conv layer
         s = 4
+
+        z = tf.random_normal((conf.GAN_TOWER_BATCH_SIZE, 100), name='totally_random')
+        if z_size is not None: z = tf.random_normal((z_size, 100))
 
         # channel depth in different
         n1 = 1024; n2 = 512; n3 = 256; n4 = 128; channels = 3
@@ -287,7 +290,7 @@ def discriminator(image, text):
         out = tf.nn.sigmoid(tf.layers.conv2d(batch5, 1, kernel_size=batch5.shape[1:3]), name='output')
 
         # output is probability for True
-        return out, conv4
+        return out
 
 
 
