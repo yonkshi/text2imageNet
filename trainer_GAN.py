@@ -150,6 +150,7 @@ def main():
 
                 print('Discriminator loss: ', dloss)
                 print('Generator loss: ', gloss)
+                print('time:', time() - t0 )
                 # Tensorboard stuff
                 writer.add_summary(summary, step)
 
