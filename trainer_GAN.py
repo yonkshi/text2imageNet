@@ -10,7 +10,7 @@ def main():
     run_title = input('Please name this session:')
     # Training parameters
     epochs = 600_000
-    lr = 0.0002
+    lr = 0.0007
     lr_decay = 0.5
     decay_every = 100_000
     save_every = 10_000
@@ -107,10 +107,10 @@ def main():
     # plot weights
     for var in tf.trainable_variables():
         tf.summary.histogram(var.name, var, family='GAN_internal')
-    for grad, var in zip(G_grads, G_vars):
-        tf.summary.histogram(var.name + '/gradient', grad, family='internal')
-    for grad, var in zip(D_grads, D_vars):
-        tf.summary.histogram(var.name + '/gradient', grad, family='internal')
+    # for grad, var in zip(G_grads, G_vars):
+    #     tf.summary.histogram(var.name + '/gradient', grad, family='internal')
+    # for grad, var in zip(D_grads, D_vars):
+    #     tf.summary.histogram(var.name + '/gradient', grad, family='internal')
 
     merged = tf.summary.merge_all()
 
