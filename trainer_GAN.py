@@ -7,7 +7,7 @@ import tensorflow as tf
 
 def main():
     """The famous main function that no one knows what it's for"""
-    run_title = input('Please name this session:')
+    run_title = 'DEBUG_RUN' if conf.SIMPLE_RUN else input('Please name this session:')
     # Training parameters
     epochs = 600_000
     lr = 0.0002
@@ -17,6 +17,7 @@ def main():
     beta1 = 0.5
     force_gpu = conf.FORCE_GPU
     num_gpu = conf.NUM_GPU
+
 
     # Encoded texts fed from the pipeline
     datasource = GanDataLoader()
@@ -131,38 +132,13 @@ def main():
     run_name = run_title + datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
 
-    #
-    # Execute the graph
-    def onehot_encode_text(txt):
-        axis1 = conf.ALPHA_SIZE
-        axis0 = conf.CHAR_DEPTH
-        oh = np.zeros((axis0, axis1))
-        for i, c in enumerate(txt):
-            if i >= conf.CHAR_DEPTH:
-                break  # Truncate long text
-            char_i = conf.ALPHABET.find(c)
-            oh[i, char_i] = 1
-
-        # l = list(map(self._c2i, txt))
-        # l += [0] * (conf.CHAR_DEPTH - len(l)) # padding
-        return oh
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=(not force_gpu))) as sess: # Allow fall back to CPU
-        tf.set_random_seed(100)
-
-        saver = tf.train.Saver()
-        saver.restore(sess, 'assets/char-rnn-cnn-19999')
-        txt = [onehot_encode_text('hello world')]
-        txt2 = np.array(txt, dtype='float32')
-        txt_t = tf.convert_to_tensor(txt2)
-        tf.set_random_seed(15)
+        #tf.set_random_seed(100)
         sess.run(tf.global_variables_initializer())
-        out = build_char_cnn_rnn(txt_t)
-        ent1 = sess.run(out)
-        ent1_ = sess.run(out)
-        ent2 = sess.run(out)
-        ent2_ = sess.run(out)
-        print('restored')
-
+        # Restore text encoder
+        text_encoder_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='txt_encode')
+        saver = tf.train.Saver(text_encoder_vars)
+        saver.restore(sess, 'assets/char-rnn-cnn-19999')
 
         datasource.preprocess_data_and_initialize(sess)
         # Run the initializers for the pipeline
