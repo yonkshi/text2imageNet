@@ -9,7 +9,7 @@ from utils import *
 def main():
 
     # Load every image in the data set into a list
-    images_np = [None]*8188
+    images_np = [None]*8189
     rel_path = 'assets/encoder_train/images'
     for i, name in enumerate(listdir(rel_path)):
 
