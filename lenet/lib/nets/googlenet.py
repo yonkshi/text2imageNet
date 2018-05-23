@@ -174,13 +174,20 @@ class GoogleNet(BaseModel):
 
         inception5b = self._create_conv(input_bgr, data_dict)
 
-        gap = global_avg_pool(inception5b)
+        gap = global_avg_pool(inception5b) # N x 1024
+
+
+        # Normalize the data
+        gap_mean, gap_var = tf.nn.moments(gap, axes=0)
+        embedding = (gap - gap_mean) / tf.sqrt(gap_var)
+
+
         gap_dropout = dropout(gap, keep_prob, self.is_training)
 
         fc1 = fc(gap_dropout, 1000, 'loss3_classifier', data_dict=data_dict)
 
         self.layer['conv_out'] = inception5b
-        self.layer['embedding'] = gap
+        self.layer['embedding'] = embedding#gap
         self.layer['output'] = fc1
         self.layer['class_prob'] = tf.nn.softmax(fc1, name='class_prob')
         self.layer['pre_prob'] = tf.reduce_max(self.layer['class_prob'],
