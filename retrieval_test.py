@@ -84,7 +84,7 @@ def main():
         encoded_texts, encoded_images_out, predictions, scores = sess.run([encoded_texts, encoded_images, predictions, scores],
                                                                   feed_dict={img_in: images_np})
 
-        best_images = images_np[predictions]
+        retrieved_images = images_np[predictions]
         a = 0
 
         writer = tf.summary.FileWriter(logdir='graphs', graph=sess.graph)
