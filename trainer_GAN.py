@@ -54,9 +54,9 @@ def main():
             G_grads = [g_grad / num_gpu  for g_grad, g_vars in G_grads_vars]
             D_grads = [d_grad / num_gpu for d_grad, d_vars in D_grads_vars]
         else:
-            # Element wise add to G_grads collection
-            G_grads = [ g_grad / num_gpu + G_grads[i][j] for j, (g_grad, g_vars) in enumerate(G_grads_vars)]
-            D_grads = [ d_grad / num_gpu + D_grads[i][j]for j, (d_grad, d_vars) in enumerate(D_grads_vars)]
+            # Element wise add to G_grads collection, G_grads is same size as G_grads_vars' grads
+            G_grads = [ g_grad / num_gpu + G_grads[j] for j, (g_grad, g_vars) in enumerate(G_grads_vars)]
+            D_grads = [ d_grad / num_gpu + D_grads[j]for j, (d_grad, d_vars) in enumerate(D_grads_vars)]
 
         G_loss = G_loss_gpu / num_gpu + G_loss
         D_loss = D_loss_gpu / num_gpu + D_loss
@@ -148,17 +148,17 @@ def main():
         return oh
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=(not force_gpu))) as sess: # Allow fall back to CPU
         tf.set_random_seed(100)
-        sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver()
 
+        saver = tf.train.Saver()
+        saver.restore(sess, 'assets/char-rnn-cnn-19999')
         txt = [onehot_encode_text('hello world')]
         txt2 = np.array(txt, dtype='float32')
         txt_t = tf.convert_to_tensor(txt2)
         tf.set_random_seed(15)
+        sess.run(tf.global_variables_initializer())
         out = build_char_cnn_rnn(txt_t)
         ent1 = sess.run(out)
         ent1_ = sess.run(out)
-        #saver.restore(sess, 'assets/char-rnn-cnn-19999')
         ent2 = sess.run(out)
         ent2_ = sess.run(out)
         print('restored')
