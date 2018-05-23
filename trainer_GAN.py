@@ -10,12 +10,13 @@ def main():
     run_title = input('Please name this session:')
     # Training parameters
     epochs = 600_000
-    lr = 0.0007
+    lr = 0.0002
     lr_decay = 0.5
     decay_every = 100_000
     save_every = 10_000
     beta1 = 0.5
-    force_gpu = True
+    force_gpu = conf.FORCE_GPU
+    num_gpu = conf.NUM_GPU
 
     # Encoded texts fed from the pipeline
     datasource = GanDataLoader()
@@ -30,28 +31,40 @@ def main():
     # Optimizers
     optimizer = tf.train.AdamOptimizer(learning_rate=lr_v, beta1=beta1)
     def split_tensor_for_gpu(t):
-        return tf.split(t,2)
+        return tf.split(t,num_gpu)
 
     # TODO Double GPU Begin =========
     # Split for GPU
-    text_right0, text_right1 = split_tensor_for_gpu(text_right)
-    real_image0, real_image1 = split_tensor_for_gpu(real_image)
-    text_wrong0, text_wrong1 = split_tensor_for_gpu(text_wrong)
-    real_image20, real_image21 = split_tensor_for_gpu(real_image2)
-    text_G0, text_G1 = split_tensor_for_gpu(text_G)
+    c1_txts = split_tensor_for_gpu(text_right)
+    c1_imgs = split_tensor_for_gpu(real_image)
+    c2_txts = split_tensor_for_gpu(text_wrong)
+    c2_imgs = split_tensor_for_gpu(real_image2)
+    cg_txts = split_tensor_for_gpu(text_G)
 
-    # Runs on GPU
-    G0_grads_vars, D0_grads_vars, G0_loss, D0_loss = loss_tower(0, optimizer, text_G0, real_image0, text_right0, real_image20, text_wrong0)
-    G1_grads_vars, D1_grads_vars, G1_loss, D1_loss = loss_tower(1, optimizer, text_G1, real_image1, text_right1, real_image21, text_wrong1)
+    G_grads = []
+    D_grads = []
+    G_loss = 0
+    D_loss = 0
+    for i in range(num_gpu):
+        # Runs on GPU
+        G_grads_vars, D_grads_vars, G_loss_gpu, D_loss_gpu = loss_tower(i, optimizer, cg_txts[i], c1_imgs[i], c1_txts[i], c2_imgs[i], c2_txts[i])
 
-    # # extract vars
-    G_vars = [var for grad, var in G0_grads_vars] #G0 and G1 share vars, so doesn't matter
-    D_vars = [var for grad, var in D0_grads_vars] # D0 and D1 share vars, so doesn't matter
+        # normalize and element wise add
+        if not G_grads:
+            G_grads = [g_grad / num_gpu  for g_grad, g_vars in G_grads_vars]
+            D_grads = [d_grad / num_gpu for d_grad, d_vars in D_grads_vars]
+        else:
+            # Element wise add to G_grads collection
+            G_grads = [ g_grad / num_gpu + G_grads[i][j] for j, (g_grad, g_vars) in enumerate(G_grads_vars)]
+            D_grads = [ d_grad / num_gpu + D_grads[i][j]for j, (d_grad, d_vars) in enumerate(D_grads_vars)]
 
-    G_grads =[ (g0_grad + g1_grad) / 2 for (g0_grad, g0_vars), (g1_grad, g1_vars) in zip(G0_grads_vars,G1_grads_vars)]
-    D_grads = [ (d0_grad + d1_grad) / 2 for (d0_grad, d0_vars), (d1_grad, d1_vars) in zip(D0_grads_vars,D1_grads_vars)]
-    G_loss = (G0_loss + G1_loss) / 2
-    D_loss = (D0_loss + D1_loss) /2
+        G_loss = G_loss_gpu / num_gpu + G_loss
+        D_loss = D_loss_gpu / num_gpu + D_loss
+    # sum and normalize
+
+    ## extract vars
+    G_vars = [var for grad, var in G_grads_vars]  # G0 and G1 share vars, so doesn't matter
+    D_vars = [var for grad, var in D_grads_vars]  # D0 and D1 share vars, so doesn't matter
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
@@ -120,12 +133,34 @@ def main():
 
     #
     # Execute the graph
+    def onehot_encode_text(txt):
+        axis1 = conf.ALPHA_SIZE
+        axis0 = conf.CHAR_DEPTH
+        oh = np.zeros((axis0, axis1))
+        for i, c in enumerate(txt):
+            if i >= conf.CHAR_DEPTH:
+                break  # Truncate long text
+            char_i = conf.ALPHABET.find(c)
+            oh[i, char_i] = 1
 
+        # l = list(map(self._c2i, txt))
+        # l += [0] * (conf.CHAR_DEPTH - len(l)) # padding
+        return oh
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=(not force_gpu))) as sess: # Allow fall back to CPU
-
+        tf.set_random_seed(100)
         sess.run(tf.global_variables_initializer())
-        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
-        saver.restore(sess, 'assets/char-rnn-cnn-19999')
+        saver = tf.train.Saver()
+
+        txt = [onehot_encode_text('hello world')]
+        txt2 = np.array(txt, dtype='float32')
+        txt_t = tf.convert_to_tensor(txt2)
+        tf.set_random_seed(15)
+        out = build_char_cnn_rnn(txt_t)
+        ent1 = sess.run(out)
+        ent1_ = sess.run(out)
+        #saver.restore(sess, 'assets/char-rnn-cnn-19999')
+        ent2 = sess.run(out)
+        ent2_ = sess.run(out)
         print('restored')
 
 
