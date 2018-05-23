@@ -33,6 +33,36 @@ def main():
 
     #lenet_out = tf.stop_gradient(lenet_encoded)
 
+    # TODO Multi GPU Begin
+    G_grads = []
+    D_grads = []
+    G_loss = 0
+    D_loss = 0
+    for i in range(num_gpu):
+        # Runs on GPU
+        G_grads_vars, D_grads_vars, G_loss_gpu, D_loss_gpu = loss_tower(i, optimizer, cg_txts[i], c1_imgs[i], c1_txts[i], c2_imgs[i], c2_txts[i])
+
+        # normalize and element wise add
+        if not G_grads:
+            G_grads = [g_grad / num_gpu  for g_grad, g_vars in G_grads_vars]
+            D_grads = [d_grad / num_gpu for d_grad, d_vars in D_grads_vars]
+        else:
+            # Element wise add to G_grads collection, G_grads is same size as G_grads_vars' grads
+            G_grads = [ g_grad / num_gpu + G_grads[j] for j, (g_grad, g_vars) in enumerate(G_grads_vars)]
+            D_grads = [ d_grad / num_gpu + D_grads[j]for j, (d_grad, d_vars) in enumerate(D_grads_vars)]
+
+        G_loss = G_loss_gpu / num_gpu + G_loss
+        D_loss = D_loss_gpu / num_gpu + D_loss
+    # sum and normalize
+
+    ## extract vars
+    G_vars = [var for grad, var in G_grads_vars]  # G0 and G1 share vars, so doesn't matter
+    D_vars = [var for grad, var in D_grads_vars]  # D0 and D1 share vars, so doesn't matter
+
+    G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
+    D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
+
+    # TODO Multi GPU End
     # Variables we want to train / get gradients for
     txt_encoder_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
 
@@ -144,7 +174,9 @@ def main():
 
     writer.close()
 
+def grad_tower( ):
 
+    pass
 def encoder_loss(V, T):
 
     """

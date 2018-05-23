@@ -60,7 +60,7 @@ def generator_resnet(text, enable_res = conf.ENABLE_RESIDUAL_NET, z_size = None)
         if z_size is not None: zz = tf.random_normal((z_size, 100))
 
         # Noise concatenated with encoded text
-        downscaled_text = tf.layers.dense(text, m,  activation=tf.nn.leaky_relu, name='linear')
+        downscaled_text = tf.layers.dense(text, m,  activation=tf.nn.relu, name='linear')
         conc = tf.concat([zz, downscaled_text], axis=-1)
         net1 = tf.layers.dense(conc, ngf * 8 * 4 * 4, activation=tf.nn.leaky_relu)
         net1 = tf.reshape(net1, (-1, 4, 4, ngf * 8))

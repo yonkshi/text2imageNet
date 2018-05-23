@@ -275,14 +275,14 @@ class GanDataLoader(BaseDataLoader):
     def _encode_txt(self, txt):
         caption_rigid = tf.reshape(txt,[-1,conf.CHAR_DEPTH, conf.ALPHA_SIZE])
         encoded_caption = build_char_cnn_rnn(caption_rigid)
-        return encoded_caption
+        normalized = tf.nn.l2_normalize(encoded_caption, axis=0) # Normalized encoded text naively
+        return normalized
 
     def _expand_elementwise(self, txt:tf.Tensor):
         txt = tf.expand_dims(txt, 1)
         txt = tf.tile(txt,[1,10,1])
         txt = tf.reshape(txt, [100, 1024])
         return tf.data.Dataset.from_tensor_slices(txt)
-
 
     def base_pipe(self, datasource, reuse=False, batch_size = conf.GAN_BATCH_SIZE, deterministic=False, shuffle_txt = False):
         images = tf.data.Dataset.from_tensor_slices(self.preprocessed_images_t)
