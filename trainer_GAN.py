@@ -118,8 +118,8 @@ def main():
     tf.summary.text('configuration', outer_string)
 
     # plot weights
-    for var in tf.trainable_variables():
-        tf.summary.histogram(var.name, var, family='GAN_internal')
+    # for var in tf.trainable_variables():
+    #     tf.summary.histogram(var.name, var, family='GAN_internal')
     # for grad, var in zip(G_grads, G_vars):
     #     tf.summary.histogram(var.name + '/gradient', grad, family='internal')
     # for grad, var in zip(D_grads, D_vars):
