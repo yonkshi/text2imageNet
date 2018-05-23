@@ -1,17 +1,13 @@
-import datetime
 from models import *
-from lenet.pretrained import generated_lenet
 from dataloader import *
-from scipy.ndimage import imread
-import matplotlib.pyplot as plt
 import conf
-from utils import *
+
 import tensorflow as tf
 
 
 def main():
     """The famous main function that no one knows what it's for"""
-
+    run_title = 'DEBUG_RUN' if conf.SIMPLE_RUN else input('Please name this session:')
     # Training parameters
     epochs = 600_000
     lr = 0.0002
@@ -19,7 +15,9 @@ def main():
     decay_every = 100_000
     save_every = 10_000
     beta1 = 0.5
-    force_gpu = True
+    force_gpu = conf.FORCE_GPU
+    num_gpu = conf.NUM_GPU
+
 
     # Encoded texts fed from the pipeline
     datasource = GanDataLoader()
@@ -31,108 +29,121 @@ def main():
     # This is to be able to change the learning rate while training
     with tf.variable_scope('learning_rate'):
         lr_v = tf.Variable(lr, trainable=False)
-
-
     # Optimizers
     optimizer = tf.train.AdamOptimizer(learning_rate=lr_v, beta1=beta1)
     def split_tensor_for_gpu(t):
-        return tf.split(t,2)
+        return tf.split(t,num_gpu)
 
     # TODO Double GPU Begin =========
     # Split for GPU
-    text_right0, text_right1 = split_tensor_for_gpu(text_right)
-    real_image0, real_image1 = split_tensor_for_gpu(real_image)
-    text_wrong0, text_wrong1 = split_tensor_for_gpu(text_wrong)
-    real_image20, real_image21 = split_tensor_for_gpu(real_image2)
-    text_G0, text_G1 = split_tensor_for_gpu(text_G)
+    c1_txts = split_tensor_for_gpu(text_right)
+    c1_imgs = split_tensor_for_gpu(real_image)
+    c2_txts = split_tensor_for_gpu(text_wrong)
+    c2_imgs = split_tensor_for_gpu(real_image2)
+    cg_txts = split_tensor_for_gpu(text_G)
 
+    G_grads = []
+    D_grads = []
+    G_loss = 0
+    D_loss = 0
+    for i in range(num_gpu):
+        # Runs on GPU
+        G_grads_vars, D_grads_vars, G_loss_gpu, D_loss_gpu = loss_tower(i, optimizer, cg_txts[i], c1_imgs[i], c1_txts[i], c2_imgs[i], c2_txts[i])
 
-    # Runs on GPU
-    # G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2, text_wrong)
-    # #G1_grads_vars, D1_grads_vars, G1_loss, D1_loss = loss_tower(1, optimizer, text_G1, real_image1, text_right1, real_image21, text_wrong1)
-    #
-    # # # extract vars
-    # G_vars = [var for grad, var in G0_grads_vars] #G0 and G1 share vars, so doesn't matter
-    # D_vars = [var for grad, var in D0_grads_vars] # D0 and D1 share vars, so doesn't matter
-    #
-    # G_grads =[ (g0_grad + g1_grad) / 2 for (g0_grad, g0_vars), (g1_grad, g1_vars) in zip(G0_grads_vars,G1_grads_vars)]
-    # D_grads = [ (d0_grad + d1_grad) / 2 for (d0_grad, d0_vars), (d1_grad, d1_vars) in zip(D0_grads_vars,D1_grads_vars)]
-    # G_loss = (G0_loss + G1_loss) / 2
-    # D_loss = (D0_loss + D1_loss) /2
+        # normalize and element wise add
+        if not G_grads:
+            G_grads = [g_grad / num_gpu  for g_grad, g_vars in G_grads_vars]
+            D_grads = [d_grad / num_gpu for d_grad, d_vars in D_grads_vars]
+        else:
+            # Element wise add to G_grads collection, G_grads is same size as G_grads_vars' grads
+            G_grads = [ g_grad / num_gpu + G_grads[j] for j, (g_grad, g_vars) in enumerate(G_grads_vars)]
+            D_grads = [ d_grad / num_gpu + D_grads[j]for j, (d_grad, d_vars) in enumerate(D_grads_vars)]
+
+        G_loss = G_loss_gpu / num_gpu + G_loss
+        D_loss = D_loss_gpu / num_gpu + D_loss
+    # sum and normalize
+
+    ## extract vars
+    G_vars = [var for grad, var in G_grads_vars]  # G0 and G1 share vars, so doesn't matter
+    D_vars = [var for grad, var in D_grads_vars]  # D0 and D1 share vars, so doesn't matter
+
+    G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
+    D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
+
 
     # Single GPU # TODO SINGLE GPU BEGIN ============
-    #G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2,
-    #                                                         text_wrong)
-    #
-    # G_opt = optimizer.apply_gradients(G_grads_vars)
-    # D_opt = optimizer.apply_gradients(D_grads_vars)
+    # G_grads_vars, D_grads_vars, G_loss, D_loss = loss_tower(0, optimizer, text_G, real_image, text_right, real_image2,
+    #                                                          text_wrong)
+
+
+    #G_opt = optimizer.apply_gradients(G_grads_vars)
+    #D_opt = optimizer.apply_gradients(D_grads_vars)
 
 
     # TODO OLD SETUP BEGIN ========
 
     # Outputs from G and D
-    fake_image = generator_resnet(text_G)
-    S_r = discriminator_resnet(real_image, text_right)
-    S_w = discriminator_resnet(real_image2, text_wrong)
-    S_f = discriminator_resnet(fake_image, text_G)
-
-
-    # Loss functions for G and D
-    G_loss = -tf.reduce_mean(tf.log(S_f))
-    D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2)
-    tf.summary.scalar('generator_loss', G_loss)
-    tf.summary.scalar('discriminator_loss', D_loss)
+    # fake_image = generator_resnet(text_G)
+    # S_r = discriminator_resnet(real_image, text_right)
+    # S_w = discriminator_resnet(real_image2, text_wrong)
+    # S_f = discriminator_resnet(fake_image, text_G)
+    #
+    #
+    # # Loss functions for G and D
+    # G_loss = -tf.reduce_mean(tf.log(S_f))
+    # D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2)
+    # tf.summary.scalar('generator_loss', G_loss)
+    # tf.summary.scalar('discriminator_loss', D_loss)
 
 
 
     # Parameters we want to train, and their gradients
-    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
-    D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-    G_grads = tf.gradients(G_loss, G_vars)
-    D_grads = tf.gradients(D_loss, D_vars)
+    # G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+    # D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
+    # G_grads = tf.gradients(G_loss, G_vars)
+    # D_grads = tf.gradients(D_loss, D_vars)
 
-    G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
-    D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
+    # G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
+    # D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
+
     # Metrics:
     testset_op = setup_testset(datasource)
-
 
     # Write to tensorboard
     setup_accuracy(text_right, real_image, text_wrong, real_image2, text_G)
     tf.summary.scalar('generator_loss', G_loss, family='GAN')
     tf.summary.scalar('discriminator_loss', D_loss, family='GAN')
 
+    hp_str = 'Force_gpu:{}\ndecay_every:{}\ndecay_rate:{}\blearning_rate:{}\nepochs:{}\nforce_gpu:{}'.format(force_gpu,decay_every,decay_every,lr,epochs,force_gpu)
+    outer_string = tf.convert_to_tensor(hp_str)
+    tf.summary.text('configuration', outer_string)
+
     # plot weights
-    for var in tf.trainable_variables():
-        tf.summary.histogram(var.name, var, family='GAN_internal')
-    for grad in G_grads:
-        tf.summary.histogram(var.name + '/gradient', grad, family='internal')
-    for grad in D_grads:
-        tf.summary.histogram(var.name + '/gradient', grad, family='internal')
+    # for var in tf.trainable_variables():
+    #     tf.summary.histogram(var.name, var, family='GAN_internal')
+    # for grad, var in zip(G_grads, G_vars):
+    #     tf.summary.histogram(var.name + '/gradient', grad, family='internal')
+    # for grad, var in zip(D_grads, D_vars):
+    #     tf.summary.histogram(var.name + '/gradient', grad, family='internal')
 
     merged = tf.summary.merge_all()
 
     #fake_img_summary_op = tf.summary.image('generated_image', tf.concat([fake_image * 127.5, real_image_G * 127.5], axis=2))
-    run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
+    run_name = run_title + datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
 
-    #
-    # Execute the graph
-
-
-    t0 = time()
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=(not force_gpu))) as sess: # Allow fall back to CPU
-
+        #tf.set_random_seed(100)
         sess.run(tf.global_variables_initializer())
-        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
+        # Restore text encoder
+        text_encoder_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='txt_encode')
+        saver = tf.train.Saver(text_encoder_vars)
         saver.restore(sess, 'assets/char-rnn-cnn-19999')
-        print('restored')
-
 
         datasource.preprocess_data_and_initialize(sess)
         # Run the initializers for the pipeline
 
-
+        t0 = time()
         for step in range(epochs):
 
             # Updating the learning rate every 100 epochs (starting after first 1000 update steps)
@@ -149,15 +160,18 @@ def main():
 
                 print('Discriminator loss: ', dloss)
                 print('Generator loss: ', gloss)
+                print('time:', time() - t0 )
                 # Tensorboard stuff
                 writer.add_summary(summary, step)
-
+            # if step % 2 == 0:
+            #     _, _ = sess.run(
+            #         [D_opt, G_opt])
             else:
                 _, _ = sess.run(
                     [D_opt, G_opt])
 
             if step % save_every == 0:
-                saver.save(sess, 'saved/', global_step=step)
+                saver.save(sess, 'saved/%s' % run_name, global_step=step)
 
 
             if step % 100 == 0:
@@ -167,7 +181,6 @@ def main():
                 print('1000 epoch time:', time()-t0)
                 t0 = time()
 
-
     # Close writer when done training
     writer.close()
 
@@ -175,30 +188,30 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
-            fake_image = generator(text_G)
-            S_r = discriminator(real_image, text_right)
-            S_w = discriminator(real_image2, text_wrong)
-            S_f = discriminator(fake_image, text_G)
+            fake_image = generator_resnet(text_G)
+            S_r = discriminator_resnet(real_image, text_right)
+            S_w = discriminator_resnet(real_image2, text_wrong)
+            S_f = discriminator_resnet(fake_image, text_G)
 
             # Loss functions for G and D
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
             D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2, name='G_loss_gpu%d' % gpu_num)
 
-            # Parameters we want to train, and their gradients
             G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
             D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
+            # Parameters we want to train, and their gradients
             G_grads_vars = optimizer.compute_gradients(G_loss, G_vars)
             D_grads_vars = optimizer.compute_gradients(D_loss, D_vars)
 
     return G_grads_vars, D_grads_vars, G_loss, D_loss
 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
+    with tf.device('/gpu:0'):
+        txt_in = tf.concat([c1_txt,c2_txt,cg_txt], axis=0)
+        g_img = generator_resnet(cg_txt, z_size=conf.GAN_BATCH_SIZE)
+        img_in = tf.concat([c1_img, c2_img, g_img], axis=0)
 
-    txt_in = tf.concat([c1_txt,c2_txt,cg_txt], axis=0)
-    g_img = generator(cg_txt)
-    img_in = tf.concat([c1_img, c2_img, g_img], axis=0)
-
-    dout = discriminator(img_in, txt_in)
+        dout = discriminator_resnet(img_in, txt_in)
 
     dout = tf.reshape(dout, [-1])
     ones = tf.ones_like(dout)
@@ -226,7 +239,7 @@ def setup_testset(datasource):
     sample_size = 10
     test_nondeter_txt, test_nondeter_img = datasource.test_pipe(deterministic=False, sample_size = sample_size)
 
-    test_batch_G_img = generator(test_nondeter_txt,  z_size=sample_size)
+    test_batch_G_img = generator_resnet(test_nondeter_txt,  z_size=sample_size)
     img = tf.concat([test_batch_G_img * 127.5, test_nondeter_img * 127.5], axis=2)
     test_batch_summary_op = tf.summary.image('test_batch', img, family='test_images', max_outputs=10)
 

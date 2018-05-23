@@ -33,17 +33,24 @@ def test_gan_pipeline():
 
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p")
 
+    txt = [l.onehot_encode_text('hello world')]
+    txt2 = np.array(txt, dtype='float32')
+    txt_t = tf.convert_to_tensor(txt2)
+    txt_out = build_char_cnn_rnn(txt_t)
 
-    var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='text_encoder')
 
-    writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
+        print('txt before loading saved 1', sess.run(txt_out))
+        print('txt before loading saved 2', sess.run(txt_out))
         # Load pretrained model
         saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
         saver.restore(sess, 'assets/char-rnn-cnn-19999')
+
+        print('txt after loading saved 1', sess.run(txt_out))
+        print('txt after loading saved 2', sess.run(txt_out))
 
         l.preprocess_data_and_initialize(sess)
 
@@ -94,7 +101,7 @@ class BaseDataLoader:
             text_path = join(self.caption_path, class_str)
 
             count += 1
-            #if count > 10: break # TODO Delete me
+            if count > 5 and conf.SIMPLE_RUN: break # Simple run doesn't need to load and process all files
 
             images = []
             for txt_file in listdir(text_path):
@@ -134,7 +141,7 @@ class BaseDataLoader:
         self.trainset_metadata = train_d
         print('metadata done:', time() - t0)
 
-    def _onehot_encode_text(self, txt):
+    def onehot_encode_text(self, txt):
         axis1 = conf.ALPHA_SIZE
         axis0 = conf.CHAR_DEPTH
         oh = np.zeros((axis0, axis1))
@@ -180,7 +187,7 @@ class GanDataLoader(BaseDataLoader):
         line = random.choice(lines)
         if deterministic:
             line = lines[0]
-        txt = np.array(self._onehot_encode_text(line),dtype='float32')
+        txt = np.array(self.onehot_encode_text(line), dtype='float32')
 
         # Load images
         im = imread(image_path, mode='RGB')  # First time for batch
@@ -262,13 +269,20 @@ class GanDataLoader(BaseDataLoader):
         caption_path = join(self.caption_path,class_name,txt_file + '.txt')
         with open(caption_path, 'r') as txt_file:
             lines = txt_file.readlines()
-        encoded_caps = [self._onehot_encode_text(line) for line in lines]
+        encoded_caps = [self.onehot_encode_text(line) for line in lines]
         txt = np.array(encoded_caps,dtype='float32')
         return txt
     def _encode_txt(self, txt):
         caption_rigid = tf.reshape(txt,[-1,conf.CHAR_DEPTH, conf.ALPHA_SIZE])
         encoded_caption = build_char_cnn_rnn(caption_rigid)
-        return encoded_caption
+        normalized = tf.nn.l2_normalize(encoded_caption, axis=0) # Normalized encoded text naively
+        return normalized
+
+    def _expand_elementwise(self, txt:tf.Tensor):
+        txt = tf.expand_dims(txt, 1)
+        txt = tf.tile(txt,[1,10,1])
+        txt = tf.reshape(txt, [100, 1024])
+        return tf.data.Dataset.from_tensor_slices(txt)
 
     def base_pipe(self, datasource, reuse=False, batch_size = conf.GAN_BATCH_SIZE, deterministic=False, shuffle_txt = False):
         images = tf.data.Dataset.from_tensor_slices(self.preprocessed_images_t)
@@ -280,12 +294,12 @@ class GanDataLoader(BaseDataLoader):
 
         # Static data ends
         if shuffle_txt:
-            txt = txt.shuffle(10000)
+            txt = txt.shuffle(1000)
 
         #  === Aligninig texts and images ==
         # tile it 10 times to match dim of image
         # expand 0 dim then flat_map to pipe
-        txt = txt.flat_map(lambda t: tf.data.Dataset.from_tensor_slices(tf.tile(t,[10,1])))
+        txt = txt.flat_map(self._expand_elementwise)
 
         # tile 10 times to match dim of txt
         # expand 0 dim then flat_map to pipe
@@ -301,7 +315,7 @@ class GanDataLoader(BaseDataLoader):
             pipe = pipe.shuffle(10000)
 
         pipe = pipe.batch(batch_size)
-        pipe = pipe.prefetch(200)
+        pipe = pipe.prefetch(150)
 
 
         pipe_iter = pipe.make_initializable_iterator()
@@ -374,7 +388,7 @@ class DataLoader(BaseDataLoader):
                 with open(txt_fpath, 'r') as txt_file:
                     lines = txt_file.readlines()
                     lines = [l.rstrip() for l in lines]
-                txt = list(map(self._onehot_encode_text, lines))
+                txt = list(map(self.onehot_encode_text, lines))
 
                 # Load images
                 img_fpath = join(self.image_path, img_name + '.jpg')

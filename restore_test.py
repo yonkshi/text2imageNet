@@ -25,11 +25,7 @@ def onehot_encode_text(txt):
 
 def main():
 
-    #txt = [onehot_encode_text('hello world')]
-    #txt2 = np.array(txt, dtype='float32')
-    #txt_t = tf.convert_to_tensor(txt2)
-
-
+    # Test cases
     text_names = ['assets/encoder_train/captions/class_00001/image_06734.txt',
                   'assets/encoder_train/captions/class_00009/image_06396.txt',
                   'assets/encoder_train/captions/class_00017/image_03830.txt',
@@ -39,7 +35,6 @@ def main():
     texts = np.array([onehot_encode_text(txt) for txt in text_names], dtype=np.float32)
     texts = tf.convert_to_tensor(texts)
 
-    #texts = tf.placeholder('float32', [None, conf.CHAR_DEPTH, conf.ALPHA_SIZE])
     encoded_texts = build_char_cnn_rnn(texts) # k x 1024
 
 
@@ -59,7 +54,6 @@ def main():
 
 
     images_np = np.array(image_list)
-    images_tf = tf.convert_to_tensor(images_np)
 
 
     # img_out and img_in are placeholders. images_out = sess.run(img_out, {img_in : images})
@@ -72,8 +66,7 @@ def main():
     predictions = tf.argmax(scores, axis=0)
 
 
-    # todo: fix shape shit
-    #best_images = images_np[predictions]
+
 
     graph = tf.get_default_graph()
     variables = graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='txt_encode')
@@ -81,12 +74,12 @@ def main():
     # Only fill up these variables if using saver.restore. GOOD!
     saver = tf.train.Saver(variables)
 
+
     with tf.Session() as sess:
 
         sess.run(tf.global_variables_initializer())
         saver.restore(sess, 'assets/char-rnn-cnn-19999')
         print('variables restored')
-
 
         encoded_texts, encoded_images_out, predictions, scores = sess.run([encoded_texts, encoded_images, predictions, scores],
                                                                   feed_dict={img_in: images_np})
@@ -94,9 +87,7 @@ def main():
         best_images = images_np[predictions]
         a = 0
 
-
-
-        #writer = tf.summary.FileWriter(logdir='graphs', graph=sess.graph)
+        writer = tf.summary.FileWriter(logdir='graphs', graph=sess.graph)
 
 
 if __name__ == '__main__':
