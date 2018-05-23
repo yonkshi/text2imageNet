@@ -352,8 +352,6 @@ class GanDataLoader(BaseDataLoader):
         self.testset_iterators.append(test_iterator.initializer)
         return encoded_txt, img
 
-
-
 class DataLoader(BaseDataLoader):
     def __init__(self):
         super(DataLoader, self).__init__()
@@ -461,9 +459,9 @@ class DataLoader(BaseDataLoader):
 
         # Convert labels to relative labels
         mapped = list(sorted(test_captions.keys()))
-        self.test_labels = list(map(mapped.index,test_labels))
-        self.test_images = test_images
-        self.test_captions = test_captions
+        self.test_labels = np.array(list(map(mapped.index,test_labels)))
+        self.test_images = np.array(test_images)
+        self.test_captions = np.array(test_captions)
 
     def _shuffle_idx(self):
         """
@@ -483,27 +481,66 @@ class DataLoader(BaseDataLoader):
         '''
         if self.data is None:
             raise Exception('Data not preprocessed! Did you call .process_data() beforehand? ')
+        while True:
+            batch = []
+            classes = []
+            images = []
+            captions = []
+            if len(self.sh_idx) < conf.BATCH_SIZE:
+                self._shuffle_idx()
 
-        batch = []
-        classes = []
-        images = []
-        captions = []
-        if len(self.sh_idx) < conf.BATCH_SIZE:
-            self._shuffle_idx()
+            for i in range(conf.BATCH_SIZE):
+                cls = self.sh_idx.pop()
+                d = self.data[cls]
+                sample_idx = np.random.randint(0, len(d))
+                img, caption = self.data[cls][sample_idx]
 
-        for i in range(conf.BATCH_SIZE):
-            cls = self.sh_idx.pop()
-            d = self.data[cls]
-            sample_idx = np.random.randint(0, len(d))
-            img, caption = self.data[cls][sample_idx]
-
-            #append
-            images.append(img)
-            captions.append(caption)
-            classes.append(cls)
+                #append
+                images.append(img)
+                captions.append(caption)
+                classes.append(cls)
 
 
-        return (classes, images, captions)
+            yield (classes, images, captions)
+
+    def preloader(self):
+        tf.data.Dataset.list_files('assets/encoder_train/images/')
+
+
+
+    def _load_and_process(self, metadata):
+        class_name = metadata[0].decode('utf-8')  # bytes to string
+
+        # Image
+        img_file = metadata[1].decode('utf-8') # bytes to string
+        image_path = join(self.image_path, img_file + '.jpg')
+        im = imread(image_path, mode='RGB')
+        images = sample_image_crop_flip(im, return_multiple=True)
+
+        # Text
+        caption_path = join(self.caption_path,class_name,img_file + '.txt')
+        with open(caption_path, 'r') as txt_file:
+            lines = txt_file.readlines()
+        encoded_caps = [self.onehot_encode_text(line) for line in lines]
+        txt = np.array(encoded_caps,dtype='float32')
+
+        # Align text with image
+        txt = np.repeat(txt, 10, axis = 0)
+        img = np.tile(images, [10,1,1,1])
+
+        cls= int(class_name.split('_')[1])
+
+        return txt, img, cls
+
+
+    def base_pipe(self):
+        pipe = tf.data.Dataset.from_generator(self.next_batch, output_types=(tf.int32, tf.float32, tf.float32), output_shapes=([None],[None, 224, 224, 3],[None, conf.CHAR_DEPTH, conf.ALPHA_SIZE]))
+        pipe = pipe.prefetch(100)
+
+        pipe_iter = pipe.make_initializable_iterator()
+        pipe_next = pipe_iter.get_next()
+        cls, image, txt = pipe_next
+        return pipe_iter, cls, image, txt
 
 def load_and_process_image_batch(): # TODO add batch support
     """
