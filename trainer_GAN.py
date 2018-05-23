@@ -163,12 +163,12 @@ def main():
                 print('time:', time() - t0 )
                 # Tensorboard stuff
                 writer.add_summary(summary, step)
-            if step % 2 == 0:
+            # if step % 2 == 0:
+            #     _, _ = sess.run(
+            #         [D_opt, G_opt])
+            else:
                 _, _ = sess.run(
                     [D_opt, G_opt])
-            else:
-                _ = sess.run(
-                    [G_opt])
 
             if step % save_every == 0:
                 saver.save(sess, 'saved/%s' % run_name, global_step=step)
