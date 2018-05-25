@@ -1,4 +1,5 @@
-SIMPLE_RUN = True
+SIMPLE_RUN = False
+
 
 # Text encoder conf
 ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789-,;.!?:'\"/\\|_@#$%^&*~`+-=<>()[]{} "

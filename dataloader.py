@@ -21,59 +21,21 @@ import bisect
 from utils import *
 
 
-
-
 def test_gan_pipeline():
     print('hello world')
 
-    l = GanDataLoader()
-    encoded, img = l.correct_pipe()
-    #iterator2, next2, (encoded2, img2) = l.incorrect_pipe() # , (label2, encoded2, img2)
-    #iterator_txt, next_txt, (label3, encoded3, img3) = l.text_only_pipe()
 
-    run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p")
-
-    txt = [l.onehot_encode_text('hello world')]
-    txt2 = np.array(txt, dtype='float32')
-    txt_t = tf.convert_to_tensor(txt2)
-    txt_out = build_char_cnn_rnn(txt_t)
-
-
+    dl = DataLoader()
+    iterator, cls, img, txt = dl.get_training_set()
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-
-        print('txt before loading saved 1', sess.run(txt_out))
-        print('txt before loading saved 2', sess.run(txt_out))
-        # Load pretrained model
-        saver = tf.train.import_meta_graph('assets/char-rnn-cnn-19999.meta')
-        saver.restore(sess, 'assets/char-rnn-cnn-19999')
-
-        print('txt after loading saved 1', sess.run(txt_out))
-        print('txt after loading saved 2', sess.run(txt_out))
-
-        l.preprocess_data_and_initialize(sess)
-
-
-
-        print('hey')
-        #sess.run(iterator.initializer)
-        #sess.run(iterator2.initializer)
-        #sess.run(iterator_txt.initializer)
+        sess.run(iterator.initializer)
         t0 = time()
-        for i in range(100000):
-
-
-            #_, a, i1 = sess.run([next, encoded, img])
-            iter, img_ = sess.run([encoded, img])
-
-           # txt_out = sess.run(encoded3)
-
-            #print(tf.shape(a))
-            print(i)
+        for i in range(100):
+            cls_, img_, txt_  = sess.run([cls, img, txt])
+            print(i, cls_, np.sum(img_), np.sum(txt_))
             ttt.sleep(0.1)
-
-
 
         print('time',time()-t0)
 
@@ -357,71 +319,56 @@ class DataLoader(BaseDataLoader):
         super(DataLoader, self).__init__()
         self.sh_idx = [] # shuffled index,
         self.data = None
+        self.preprocess_data()
 
-
-    def process_data(self):
+    def preprocess_data(self):
         t0 = time()
         print('pre processing data')
         indices = loadmat('assets/encoder_train/test_set_idx.mat')
         test_set_idx = sorted(loadmat('assets/encoder_train/test_set_idx.mat')['trnid'][0,:])
 
         # worker thread
-        def work(q: Queue, ret_q: Queue):
+        def work(q: Queue, ret_q_train: Queue, ret_q_test):
             while not q.empty():
-                cls, img_name = q.get()
+                cls, img_name, is_train_data = q.get()
                 if q.qsize() % 100 == 0: print('remaining', q.qsize())
 
-                # Split test set
-                img_id = int(img_name.split('_')[1])
-                i = bisect.bisect_left(test_set_idx, img_id)
-
-                is_test_set = False
-                if i != len(test_set_idx) and test_set_idx[i] == img_id:
-                    is_test_set = True
-                    del test_set_idx[i]
-
                 # Load captions for image
-                cls_dir = 'class_%05d' % (cls+1)
-                txt_fpath = join(self.caption_path, cls_dir, img_name + '.txt')
+                #cls_dir = 'class_%05d' % (cls+1)
+
+                txt_fpath = join(self.caption_path, cls, img_name + '.txt')
                 with open(txt_fpath, 'r') as txt_file:
                     lines = txt_file.readlines()
                     lines = [l.rstrip() for l in lines]
                 txt = list(map(self.onehot_encode_text, lines))
-
-                # Load images
-                img_fpath = join(self.image_path, img_name + '.jpg')
-                im = imread(img_fpath, mode='RGB') # First time for batch
-                resized_images = crop_and_flip(im, crop_just_one=is_test_set)
-
-
-                if is_test_set and txt:
-                    # only 1 image per class
-                    ret_q.put((cls, resized_images[0], txt, is_test_set))
-
+                img_idx = int(img_name.split('_')[1]) - 1 # zero index
+                cls_idx = int(cls.split('_')[1]) -1 # zero index
+                if is_train_data:
+                    ret_q_train.put((cls_idx, txt, img_idx))
                 else:
-                    for img in resized_images:
-                        for caption in txt:
-                            ret_q.put((cls, img, caption, is_test_set))
+                    ret_q_test.put((cls_idx, txt, img_idx))
                 q.task_done()
 
-        threads = []
-        data = {}
-
         in_q = Queue()
-        out_q = Queue()
+        out_q_train = Queue()
+        out_q_test = Queue()
 
-        # Fill worker queue
+        # Fill worker queue, test set
+        for i, train_sample in enumerate(self.trainset_metadata):
+            cls = train_sample[0]
+            image_name = train_sample[1]
+            in_q.put((cls, image_name, True))
 
-        for i, (cls, image_names) in enumerate(self.meta_data.items()):
-            for img_name in image_names:
-                in_q.put((cls, img_name))
+        # Fill test set metadata
+        for i, test_sample in enumerate(self.testset_metadata):
+            cls = test_sample[0]
+            image_name = test_sample[1]
+            in_q.put((cls, image_name, False))
 
-            #if i > 5: break # TODO Delete me
 
         # Spawn threads
         for i in range(conf.PRE_PROCESSING_THREADS):
-            worker = Thread(target=work, args=(in_q, out_q))
-            threads.append(worker)
+            worker = Thread(target=work, args=(in_q, out_q_train, out_q_test))
             worker.start()
 
         # Blocking for worker threads
@@ -429,33 +376,37 @@ class DataLoader(BaseDataLoader):
         print('workers completed')
         test_count = 0
         data_count = 0
-
+        training_set = {}
         test_images = []
         test_labels = []
         test_captions = {}
+        encoded_images  = np.load('assets/encoded_images.npy')
 
+        # setup train dataset
+        while not out_q_train.empty():
+            cls, onehot_captions, img_idx = out_q_train.get()
+            if cls not in training_set:
+                training_set[cls] = []
 
-        while not out_q.empty():
-            cls, image, captions, belongs_to_testset = out_q.get()
-            if belongs_to_testset:
-                #if test_count > 100: continue # TODO Delete me, this is to limit test set for testing purpose
+            encoded_image = encoded_images[img_idx, ...]
+            for caption in onehot_captions:
+                training_set[cls].append((encoded_image, caption))
 
-                if cls not in test_captions:
-                    test_captions[cls] = []
+        while not out_q_test.empty():
+            cls, onehot_captions, img_idx = out_q_test.get()
 
-                test_count += 1
-                test_images.append(image)
-                test_labels.append(cls)
-                test_captions[cls].extend(captions)
-            else:
-                if cls not in data:
-                    data[cls] = []
-                data_count += 1
-                data[cls].append((image, captions))
+            if cls not in test_captions:
+                test_captions[cls] = []
+
+            encoded_image = encoded_images[img_idx, ...]
+            test_count += 1
+            test_images.append(encoded_image)
+            test_labels.append(cls)
+            test_captions[cls].extend(onehot_captions)
 
         print('pre processing complete, time:', time() - t0)
 
-        self.data = data
+        self.training_set = training_set
 
         # Convert labels to relative labels
         mapped = list(sorted(test_captions.keys()))
@@ -468,40 +419,28 @@ class DataLoader(BaseDataLoader):
         Adds more shuffled index into queue
         :return:
         """
-        idx = np.array(list(self.data.keys()))
+        idx = np.array(list(self.training_set.keys()))
         np.random.shuffle(idx)
         self.sh_idx += idx.tolist()
 
-
-
-    def next_batch(self): #TODO modify to comply with TF pipeline?
+    def train_batch_generator(self):
         '''
         Get batches of data
         :return:
         '''
-        if self.data is None:
+        if self.training_set is None:
             raise Exception('Data not preprocessed! Did you call .process_data() beforehand? ')
+
         while True:
-            batch = []
-            classes = []
-            images = []
-            captions = []
-            if len(self.sh_idx) < conf.BATCH_SIZE:
+            if len(self.sh_idx) < conf.BATCH_SIZE * 2:
                 self._shuffle_idx()
 
-            for i in range(conf.BATCH_SIZE):
-                cls = self.sh_idx.pop()
-                d = self.data[cls]
-                sample_idx = np.random.randint(0, len(d))
-                img, caption = self.data[cls][sample_idx]
+            cls = self.sh_idx.pop()
+            d = self.training_set[cls]
+            sample_idx = np.random.randint(0, len(d))
+            img, caption = self.training_set[cls][sample_idx]
 
-                #append
-                images.append(img)
-                captions.append(caption)
-                classes.append(cls)
-
-
-            yield (classes, images, captions)
+            yield (cls, img, caption)
 
     def preloader(self):
         tf.data.Dataset.list_files('assets/encoder_train/images/')
@@ -533,76 +472,23 @@ class DataLoader(BaseDataLoader):
         return txt, img, cls
 
 
-    def base_pipe(self):
-        pipe = tf.data.Dataset.from_generator(self.next_batch, output_types=(tf.int32, tf.float32, tf.float32), output_shapes=([None],[None, 224, 224, 3],[None, conf.CHAR_DEPTH, conf.ALPHA_SIZE]))
+    def _base_pipe(self, generator):
+        pipe = tf.data.Dataset.from_generator(generator, output_types=(tf.int32, tf.float32, tf.float32), output_shapes=([],[1024],[conf.CHAR_DEPTH, conf.ALPHA_SIZE]))
+        #pipe = tf.data.Dataset.from_tensor_slices(list(self.training_set.values()))
+        pipe = pipe.batch(conf.BATCH_SIZE)
         pipe = pipe.prefetch(100)
 
+
         pipe_iter = pipe.make_initializable_iterator()
-        pipe_next = pipe_iter.get_next()
-        cls, image, txt = pipe_next
+        cls, image, txt = pipe_iter.get_next()
         return pipe_iter, cls, image, txt
 
-def load_and_process_image_batch(): # TODO add batch support
-    """
-    Loads images and preprocess them into 3 channel images
-    :param bathces:
-    :return: batches of images tensor. [Batchsize, width, height, 3]
-    """
+    def get_training_set(self):
+        return self._base_pipe(self.train_batch_generator)
 
-    images = []
+    def get_test_set(self):
+        return self._base_pipe(self.train_batch_generator)
 
-    im = imread('assets/training/4.png', mode='RGB') # First time for batch
-    resized_im = resize_image_with_smallest_side(im)
-
-    images.append(resized_im)
-
-    im = imread('assets/training/4.png', mode='RGB') # First time for batch
-    resized_im = resize_image_with_smallest_side(im)
-    images.append(resized_im)
-    npim = np.array(images)
-    return npim
-
-def resize_image_with_smallest_side(image, small_size=224):
-    """
-    Resize single image array with smallest side = small_size and
-    keep the original aspect ratio.
-
-    Author: Qian Ge <geqian1001@gmail.com>
-
-    Args:
-        image (np.array): 2-D image of shape
-            [height, width] or 3-D image of shape
-            [height, width, channels] or 4-D of shape
-            [1, height, width, channels].
-        small_size (int): A 1-D int. The smallest side of resize image.
-    """
-    im_shape = image.shape
-    shape_dim = len(im_shape)
-    assert shape_dim <= 4 and shape_dim >= 2,\
-        'Wrong format of image!Shape is {}'.format(im_shape)
-
-    if shape_dim == 4:
-        image = np.squeeze(image, axis=0)
-        height = float(im_shape[1])
-        width = float(im_shape[2])
-    else:
-        height = float(im_shape[0])
-        width = float(im_shape[1])
-
-    if height <= width:
-        new_height = int(small_size)
-        new_width = int(new_height/height * width)
-    else:
-        new_width = int(small_size)
-        new_height = int(new_width/width * height)
-
-    if shape_dim == 2:
-        im = misc.imresize(image, (new_height, new_width))
-    elif shape_dim == 3:
-        im = misc.imresize(image, (new_height, new_width, image.shape[2]))
-    else:
-        im = misc.imresize(image, (new_height, new_width, im_shape[3]))
-        im = np.expand_dims(im, axis=0)
 
 if __name__ == '__main__':
     test_gan_pipeline()

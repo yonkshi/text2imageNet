@@ -18,8 +18,7 @@ def main():
 
     # raw input
     data = DataLoader()
-    data.process_data()
-    iterator, cls, image_batch, text_batch = data.base_pipe()
+    iterator, cls, image_batch, text_batch = data.get_training_set()
 
     # Optimizer
     optimizer = tf.train.RMSPropOptimizer(learning_rate=lr)
@@ -50,11 +49,9 @@ def main():
     tf.summary.scalar('loss', loss)
     merged_summary_op = tf.summary.merge_all()
 
-
-
     # to save the graph and all variables
     saver = tf.train.Saver()
-    accuracy_run = accuracy_calc()
+    #accuracy_run = accuracy_calc()
 
     # Merged summaries for Tensorboard visualization
     run_name = datetime.datetime.now().strftime("May_%d_%I_%M%p")
@@ -76,17 +73,8 @@ def main():
             if update % 1000 == 0 or update == epochs-1:
                 saver.save(sess, './text_encoder/%s' % run_name, global_step=update)
 
-            if update % 100 == 0:
-                accuracy_run(sess,writer,data,update)
-                # caption_mx = []
-                # for sorted_key in sorted(data.test_captions.keys()):
-                #     captions = data.test_captions[sorted_key]
-                #     encoded_text_per_class = sess.run(txt_class_mean, feed_dict={t_caption:captions})
-                #     caption_mx.append(encoded_text_per_class)
-                #
-                # _acc_sum, _acccuracy = sess.run([accuracy_summary_op, accuracy_op], feed_dict={t_caption: caption_mx, t_accuracy_labels:data.test_labels, t_image:data.test_images})
-                # print('accuracy: %0.5f' % _acccuracy)
-                # writer.add_summary(_acc_sum, update)
+            # if update % 100 == 0:
+            #     accuracy_run(sess,writer,data,update)
 
     writer.close()
 
@@ -127,21 +115,20 @@ def accuracy_calc():
 
     return accuracy_run
 
-def grad_tower(gpu_num, caption, image):
+def grad_tower(gpu_num, caption, encoded_image):
     # Loss
     # Setting up Queue
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('scope_gpu_%d' % gpu_num):
             txt_encoder = build_char_cnn_rnn(caption)
-            lenet_encoded = t_replacelenet #generated_lenet(image)
-            loss = encoder_loss(lenet_encoded, txt_encoder)
+            #lenet_encoded = t_replacelenet #generated_lenet(image)
+            loss = encoder_loss(encoded_image, txt_encoder)
 
             txt_encoder_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
             # Gradients. # todo: clip by global norm 5?
             grads = tf.gradients(loss, txt_encoder_vars)
 
     return grads, loss
-
 
 def encoder_loss(V, T):
 
@@ -163,7 +150,6 @@ def encoder_loss(V, T):
         loss = tf.reduce_mean(temp)
 
         return loss
-
 
 def encoder_accuracy(labels:tf.Tensor, images:tf.Tensor, captions:tf.Tensor):
     captions_T = tf.transpose(captions)
