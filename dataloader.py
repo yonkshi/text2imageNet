@@ -237,8 +237,8 @@ class GanDataLoader(BaseDataLoader):
     def _encode_txt(self, txt):
         caption_rigid = tf.reshape(txt,[-1,conf.CHAR_DEPTH, conf.ALPHA_SIZE])
         encoded_caption = text_encoder(caption_rigid)
-        normalized = tf.nn.l2_normalize(encoded_caption, axis=0) # Normalized encoded text naively
-        return normalized
+        #normalized = tf.nn.l2_normalize(encoded_caption, axis=0) # Normalized encoded text naively
+        return encoded_caption
 
     def _expand_elementwise(self, txt:tf.Tensor):
         txt = tf.expand_dims(txt, 1)
