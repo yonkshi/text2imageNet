@@ -4,7 +4,7 @@ from tensorflow.contrib import rnn
 import numpy as np
 import conf
 
-def build_char_cnn_rnn(input_seqs):
+def text_encoder(input_seqs):
 
     with tf.variable_scope("txt_encode", reuse=tf.AUTO_REUSE):
         cnn_dim = 256 # dont know?
