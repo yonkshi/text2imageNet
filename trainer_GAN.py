@@ -64,8 +64,15 @@ def main():
     # sum and normalize
 
     ## extract vars
-    G_vars = [var for grad, var in G_grads_vars]  # G0 and G1 share vars, so doesn't matter
-    D_vars = [var for grad, var in D_grads_vars]  # D0 and D1 share vars, so doesn't matter
+    #G_vars = [var for grad, var in G_grads_vars]  # G0 and G1 share vars, so doesn't matter
+    #D_vars = [var for grad, var in D_grads_vars]  # D0 and D1 share vars, so doesn't matter
+
+    G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+    D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
+    Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
+
+    G_vars += Encode_vars
+    D_vars += Encode_vars
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
