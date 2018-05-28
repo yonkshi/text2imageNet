@@ -20,7 +20,7 @@ def main():
 
 
     # Encoded texts fed from the pipeline
-    datasource = GanDataLoader_NoEncoder()
+    datasource = GanDataLoader()
     text_right, real_image = datasource.correct_pipe()
     text_wrong, real_image2 = datasource.incorrect_pipe()
     text_G, real_image_G = datasource.text_only_pipe()
@@ -69,7 +69,11 @@ def main():
 
     G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
     D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-    Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
+
+    if conf.END_TO_END:
+        Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
+    else:
+        Encode_vars = []
 
     G_vars += Encode_vars
     D_vars += Encode_vars
@@ -196,13 +200,19 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
-            encoded_correct_text = text_encoder(text_right)
-            encoded_generator_text = text_encoder(text_G)
-            encoded_wrong_text = text_encoder(text_wrong)
-            fake_image = generator_resnet(encoded_generator_text)
-            S_r = discriminator_resnet(real_image, encoded_correct_text)
-            S_w = discriminator_resnet(real_image2, encoded_wrong_text)
-            S_f = discriminator_resnet(fake_image, encoded_generator_text)
+
+            if conf.END_TO_END:
+                text_right = text_encoder(text_right)
+                text_G = text_encoder(text_G)
+                text_wrong = text_encoder(text_wrong)
+                Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
+            else:
+                Encode_vars = []
+
+            fake_image = generator_resnet(text_G)
+            S_r = discriminator_resnet(real_image, text_right)
+            S_w = discriminator_resnet(real_image2, text_wrong)
+            S_f = discriminator_resnet(fake_image, text_G)
 
             # Loss functions for G and D
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
@@ -210,9 +220,8 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
             G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
             D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
-            Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
 
-            concat = G_vars + Encode_vars
+
 
             # Parameters we want to train, and their gradients
             G_grads_vars = optimizer.compute_gradients(G_loss, G_vars + Encode_vars)
@@ -222,13 +231,12 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
     with tf.device('/gpu:0'):
+        #c1_txt = text_encoder(c1_txt)
+        #c2_txt = text_encoder(c2_txt)
+        #cg_txt = text_encoder(cg_txt)
+        txt_in = tf.concat([c1_txt, c2_txt, cg_txt], axis=0)
 
-        encoded_c1_text = text_encoder(c1_txt)
-        encoded_c2_text = text_encoder(c2_txt)
-        encoded_cg_text = text_encoder(cg_txt)
-        txt_in = tf.concat([encoded_c1_text, encoded_c2_text, encoded_cg_text], axis=0)
-
-        g_img = generator_resnet(encoded_cg_text, z_size=conf.GAN_BATCH_SIZE)
+        g_img = generator_resnet(cg_txt, z_size=conf.GAN_BATCH_SIZE)
         img_in = tf.concat([c1_img, c2_img, g_img], axis=0)
 
         dout = discriminator_resnet(img_in, txt_in)
@@ -258,8 +266,8 @@ def setup_testset(datasource):
     # Non-derterministic
     sample_size = 10
     test_nondeter_txt, test_nondeter_img = datasource.test_pipe(deterministic=False, sample_size = sample_size)
-    encoded_cg_text = text_encoder(test_nondeter_txt)
-    test_batch_G_img = generator_resnet(encoded_cg_text,  z_size=sample_size)
+    #test_nondeter_txt = text_encoder(test_nondeter_txt)
+    test_batch_G_img = generator_resnet(test_nondeter_txt,  z_size=sample_size)
     img = tf.concat([test_batch_G_img * 127.5, test_nondeter_img * 127.5], axis=2)
     test_batch_summary_op = tf.summary.image('test_batch', img, family='test_images', max_outputs=10)
 
