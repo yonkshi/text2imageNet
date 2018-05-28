@@ -20,7 +20,10 @@ def main():
 
 
     # Encoded texts fed from the pipeline
-    datasource = GanDataLoader()
+    if conf.END_TO_END:
+        datasource = GanDataLoader_NoEncoder()
+    else:
+        datasource = GanDataLoader()
     text_right, real_image = datasource.correct_pipe()
     text_wrong, real_image2 = datasource.incorrect_pipe()
     text_G, real_image_G = datasource.text_only_pipe()
@@ -166,7 +169,7 @@ def main():
             # Updates parameters in G and D, only every third time for D
             if step % 10 == 0:
                 print('Update: ', step)
-                summary, dloss, gloss, _, _ = sess.run(
+                summary, dloss, gloss, _, _= sess.run(
                     [merged, D_loss, G_loss, D_opt, G_opt])
 
                 print('Discriminator loss: ', dloss)
@@ -231,9 +234,10 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
     with tf.device('/gpu:0'):
-        #c1_txt = text_encoder(c1_txt)
-        #c2_txt = text_encoder(c2_txt)
-        #cg_txt = text_encoder(cg_txt)
+        if conf.END_TO_END:
+            c1_txt = text_encoder(c1_txt)
+            c2_txt = text_encoder(c2_txt)
+            cg_txt = text_encoder(cg_txt)
         txt_in = tf.concat([c1_txt, c2_txt, cg_txt], axis=0)
 
         g_img = generator_resnet(cg_txt, z_size=conf.GAN_BATCH_SIZE)
@@ -266,7 +270,10 @@ def setup_testset(datasource):
     # Non-derterministic
     sample_size = 10
     test_nondeter_txt, test_nondeter_img = datasource.test_pipe(deterministic=False, sample_size = sample_size)
-    #test_nondeter_txt = text_encoder(test_nondeter_txt)
+
+    if conf.END_TO_END:
+        test_nondeter_txt = text_encoder(test_nondeter_txt)
+
     test_batch_G_img = generator_resnet(test_nondeter_txt,  z_size=sample_size)
     img = tf.concat([test_batch_G_img * 127.5, test_nondeter_img * 127.5], axis=2)
     test_batch_summary_op = tf.summary.image('test_batch', img, family='test_images', max_outputs=10)
