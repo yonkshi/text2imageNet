@@ -137,8 +137,8 @@ def main():
         sess.run(tf.global_variables_initializer())
         # Restore text encoder
         text_encoder_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='txt_encode')
-        saver = tf.train.Saver(text_encoder_vars)
-        saver.restore(sess, 'assets/char-rnn-cnn-19999')
+        # saver = tf.train.Saver(text_encoder_vars)
+        # saver.restore(sess, 'assets/char-rnn-cnn-19999')
 
         datasource.preprocess_data_and_initialize(sess)
         # Run the initializers for the pipeline
@@ -171,7 +171,8 @@ def main():
                     [D_opt, G_opt])
 
             if step % save_every == 0:
-                saver.save(sess, 'saved/%s' % run_name, global_step=step)
+                #saver.save(sess, 'saved/%s' % run_name, global_step=step)
+                pass
 
 
             if step % 100 == 0:
@@ -199,9 +200,13 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
             G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
             D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
+            Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
+
+            concat = G_vars + Encode_vars
+
             # Parameters we want to train, and their gradients
-            G_grads_vars = optimizer.compute_gradients(G_loss, G_vars)
-            D_grads_vars = optimizer.compute_gradients(D_loss, D_vars)
+            G_grads_vars = optimizer.compute_gradients(G_loss, G_vars + Encode_vars)
+            D_grads_vars = optimizer.compute_gradients(D_loss, D_vars + Encode_vars)
 
     return G_grads_vars, D_grads_vars, G_loss, D_loss
 
