@@ -10,7 +10,7 @@ def main():
     run_title = 'DEBUG_RUN' if conf.SIMPLE_RUN else input('Please name this session:')
     # Training parameters
     epochs = 600_000
-    lr = 0.0002
+    lr = 0.00002
     lr_decay = 0.5
     decay_every = 100_000
     save_every = 10_000
@@ -79,7 +79,7 @@ def main():
         Encode_vars = []
 
     G_vars += Encode_vars
-    D_vars += Encode_vars
+    #D_vars += Encode_vars
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
@@ -228,7 +228,7 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
             # Parameters we want to train, and their gradients
             G_grads_vars = optimizer.compute_gradients(G_loss, G_vars + Encode_vars)
-            D_grads_vars = optimizer.compute_gradients(D_loss, D_vars + Encode_vars)
+            D_grads_vars = optimizer.compute_gradients(D_loss, D_vars) # disable text encoder training on D
 
     return G_grads_vars, D_grads_vars, G_loss, D_loss
 
