@@ -79,7 +79,7 @@ def main():
         Encoder_grads_D = D_grads[24:]
         D_grads = D_grads[:24]
         Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
-        Encoder_grads = [g + d for g, d in zip(Encoder_grads_G, Encoder_grads_D)]
+        Encoder_grads = [(g + d)/2 for g, d in zip(Encoder_grads_G, Encoder_grads_D)]
         E_opt = optimizer.apply_gradients(zip(Encoder_grads, Encode_vars))
 
     else:
