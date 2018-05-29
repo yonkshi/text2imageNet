@@ -47,20 +47,23 @@ def main():
 
     G_grads = []
     D_grads = []
+    text_grads = []
     G_loss = 0
     D_loss = 0
     for i in range(num_gpu):
         # Runs on GPU
-        G_grads_vars, D_grads_vars, G_loss_gpu, D_loss_gpu = loss_tower(i, optimizer, cg_txts[i], c1_imgs[i], c1_txts[i], c2_imgs[i], c2_txts[i])
+        G_grads_vars, D_grads_vars, G_loss_gpu, D_loss_gpu, txt_grads_gpu = loss_tower(i, optimizer, cg_txts[i], c1_imgs[i], c1_txts[i], c2_imgs[i], c2_txts[i])
 
         # normalize and element wise add
         if not G_grads:
             G_grads = [g_grad / num_gpu  for g_grad, g_vars in G_grads_vars]
             D_grads = [d_grad / num_gpu for d_grad, d_vars in D_grads_vars]
+            text_grads = [txt_grad / num_gpu for txt_grad, txt_vars in txt_grads_gpu]
         else:
             # Element wise add to G_grads collection, G_grads is same size as G_grads_vars' grads
             G_grads = [ g_grad / num_gpu + G_grads[j] for j, (g_grad, g_vars) in enumerate(G_grads_vars)]
             D_grads = [ d_grad / num_gpu + D_grads[j]for j, (d_grad, d_vars) in enumerate(D_grads_vars)]
+            text_grads = [txt_grad / num_gpu + text_grads[j] for j, (txt_grad, txt_vars) in enumerate(txt_grads_gpu)]
 
         G_loss = G_loss_gpu / num_gpu + G_loss
         D_loss = D_loss_gpu / num_gpu + D_loss
@@ -81,7 +84,7 @@ def main():
         Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
         # Encoder_grads = [(g + d)/2 for g, d in zip(Encoder_grads_G, Encoder_grads_D)]
         #E_opt = optimizer.apply_gradients(zip(Encoder_grads, Encode_vars))
-        E_opt = tf.constant(5)
+        E_opt = optimizer.apply_gradients(zip(text_grads, Encode_vars))
     else:
         Encode_vars = []
         E_opt = tf.constant(5)
@@ -93,6 +96,7 @@ def main():
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
+
 
 
     # Single GPU # TODO SINGLE GPU BEGIN ============
@@ -218,7 +222,6 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
                 text_right = text_encoder(text_right, reuse)
                 text_G = text_encoder(text_G, reuse)
                 text_wrong = text_encoder(text_wrong, reuse)
-                Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
             else:
                 Encode_vars = []
 
@@ -231,6 +234,11 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
             G_loss = -tf.reduce_mean(tf.log(S_f), name='G_loss_gpu%d' % gpu_num)
             D_loss = -tf.reduce_mean(tf.log(S_r) + (tf.log(1 - S_w) + tf.log(1 - S_f))/2, name='G_loss_gpu%d' % gpu_num)
 
+            if conf.END_TO_END:
+                Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
+                Txt_loss = -tf.reduce_mean(tf.log(S_r))
+                txt_grads = optimizer.compute_gradients(Txt_loss, Encode_vars)
+
             G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
             D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
 
@@ -240,7 +248,7 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
             G_grads = optimizer.compute_gradients(G_loss, G_vars)
             D_grads = optimizer.compute_gradients(D_loss, D_vars + Encode_vars) # disable text encoder training on D
 
-    return G_grads, D_grads, G_loss, D_loss
+    return G_grads, D_grads, G_loss, D_loss, txt_grads
 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt, reuse=True):
     with tf.device('/gpu:0'):
