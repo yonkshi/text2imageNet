@@ -27,7 +27,7 @@ def main():
     text_right, real_image = datasource.correct_pipe()
     text_wrong, real_image2 = datasource.incorrect_pipe()
     text_G, real_image_G = datasource.text_only_pipe()
-
+    text_encoder(text_G, reuse=False)
 
     # This is to be able to change the learning rate while training
     with tf.variable_scope('learning_rate'):
@@ -199,15 +199,15 @@ def main():
     # Close writer when done training
     writer.close()
 
-def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, text_wrong):
+def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, text_wrong, reuse=True):
     # Outputs from G and D
     with tf.device('/gpu:%d' % gpu_num):
         with tf.name_scope('gpu_%d' % gpu_num):
 
             if conf.END_TO_END:
-                text_right = text_encoder(text_right)
-                text_G = text_encoder(text_G)
-                text_wrong = text_encoder(text_wrong)
+                text_right = text_encoder(text_right, reuse)
+                text_G = text_encoder(text_G, reuse)
+                text_wrong = text_encoder(text_wrong, reuse)
                 Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
             else:
                 Encode_vars = []
@@ -232,12 +232,12 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
     return G_grads_vars, D_grads_vars, G_loss, D_loss
 
-def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt):
+def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt, reuse=True):
     with tf.device('/gpu:0'):
         if conf.END_TO_END:
-            c1_txt = text_encoder(c1_txt)
-            c2_txt = text_encoder(c2_txt)
-            cg_txt = text_encoder(cg_txt)
+            c1_txt = text_encoder(c1_txt, reuse)
+            c2_txt = text_encoder(c2_txt, reuse)
+            cg_txt = text_encoder(cg_txt, reuse)
         txt_in = tf.concat([c1_txt, c2_txt, cg_txt], axis=0)
 
         g_img = generator_resnet(cg_txt, z_size=conf.GAN_BATCH_SIZE)
@@ -272,7 +272,7 @@ def setup_testset(datasource):
     test_nondeter_txt, test_nondeter_img = datasource.test_pipe(deterministic=False, sample_size = sample_size)
 
     if conf.END_TO_END:
-        test_nondeter_txt = text_encoder(test_nondeter_txt)
+        test_nondeter_txt = text_encoder(test_nondeter_txt, reuse=True)
 
     test_batch_G_img = generator_resnet(test_nondeter_txt,  z_size=sample_size)
     img = tf.concat([test_batch_G_img * 127.5, test_nondeter_img * 127.5], axis=2)
