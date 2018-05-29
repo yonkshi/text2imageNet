@@ -74,20 +74,20 @@ def main():
     D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
 
     if conf.END_TO_END:
-        Encoder_grads_G = G_grads[22:] # TODO Hard coded split between GAN grads and encoder grads
-        G_grads = G_grads[:22]
-        Encoder_grads_D = D_grads[24:]
-        D_grads = D_grads[:24]
+        # Encoder_grads_G = G_grads[22:] # TODO Hard coded split between GAN grads and encoder grads
+        # G_grads = G_grads[:22]
+        # Encoder_grads_D = D_grads[24:]
+        # D_grads = D_grads[:24]
         Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
-        Encoder_grads = [(g + d)/2 for g, d in zip(Encoder_grads_G, Encoder_grads_D)]
-        E_opt = optimizer.apply_gradients(zip(Encoder_grads, Encode_vars))
-
+        # Encoder_grads = [(g + d)/2 for g, d in zip(Encoder_grads_G, Encoder_grads_D)]
+        #E_opt = optimizer.apply_gradients(zip(Encoder_grads, Encode_vars))
+        E_opt = tf.constant(5)
     else:
         Encode_vars = []
         E_opt = tf.constant(5)
 
     #G_vars += Encode_vars
-    #D_vars += Encode_vars
+    D_vars += Encode_vars
 
 
 
@@ -237,7 +237,7 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
 
             # Parameters we want to train, and their gradients
-            G_grads = optimizer.compute_gradients(G_loss, G_vars + Encode_vars)
+            G_grads = optimizer.compute_gradients(G_loss, G_vars)
             D_grads = optimizer.compute_gradients(D_loss, D_vars + Encode_vars) # disable text encoder training on D
 
     return G_grads, D_grads, G_loss, D_loss
