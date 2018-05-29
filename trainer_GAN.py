@@ -74,12 +74,22 @@ def main():
     D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
 
     if conf.END_TO_END:
+        Encoder_grads_G = G_grads[22:] # TODO Hard coded split between GAN grads and encoder grads
+        G_grads = G_grads[:22]
+        Encoder_grads_D = D_grads[24:]
+        D_grads = D_grads[:24]
         Encode_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='txt_encode')
+        Encoder_grads = [g + d for g, d in zip(Encoder_grads_G, Encoder_grads_D)]
+        E_opt = optimizer.apply_gradients(zip(Encoder_grads, Encode_vars))
+
     else:
         Encode_vars = []
+        E_opt = tf.constant(5)
 
     #G_vars += Encode_vars
-    D_vars += Encode_vars
+    #D_vars += Encode_vars
+
+
 
     G_opt = optimizer.apply_gradients(zip(G_grads, G_vars))
     D_opt = optimizer.apply_gradients(zip(D_grads, D_vars))
@@ -169,8 +179,8 @@ def main():
             # Updates parameters in G and D, only every third time for D
             if step % 10 == 0:
                 print('Update: ', step)
-                summary, dloss, gloss, _, _= sess.run(
-                    [merged, D_loss, G_loss, D_opt, G_opt])
+                summary, dloss, gloss, _, _, _= sess.run(
+                    [merged, D_loss, G_loss, D_opt, G_opt, E_opt])
 
                 print('Discriminator loss: ', dloss)
                 print('Generator loss: ', gloss)
@@ -181,8 +191,8 @@ def main():
             #     _, _ = sess.run(
             #         [D_opt, G_opt])
             else:
-                _, _ = sess.run(
-                    [D_opt, G_opt])
+                _, _,_ = sess.run(
+                    [D_opt, G_opt, E_opt])
 
             if step % save_every == 0:
                 #saver.save(sess, 'saved/%s' % run_name, global_step=step)
@@ -227,10 +237,10 @@ def loss_tower(gpu_num, optimizer, text_G, real_image, text_right, real_image2, 
 
 
             # Parameters we want to train, and their gradients
-            G_grads_vars = optimizer.compute_gradients(G_loss, G_vars)
-            D_grads_vars = optimizer.compute_gradients(D_loss, D_vars + Encode_vars) # disable text encoder training on D
+            G_grads = optimizer.compute_gradients(G_loss, G_vars + Encode_vars)
+            D_grads = optimizer.compute_gradients(D_loss, D_vars + Encode_vars) # disable text encoder training on D
 
-    return G_grads_vars, D_grads_vars, G_loss, D_loss
+    return G_grads, D_grads, G_loss, D_loss
 
 def setup_accuracy( c1_txt, c1_img, c2_txt, c2_img, cg_txt, reuse=True):
     with tf.device('/gpu:0'):
