@@ -151,7 +151,7 @@ def main():
     #     tf.summary.histogram(var.name + '/gradient', grad, family='internal')
 
     merged = tf.summary.merge_all()
-
+    saver = tf.train.Saver()
     #fake_img_summary_op = tf.summary.image('generated_image', tf.concat([fake_image * 127.5, real_image_G * 127.5], axis=2))
     run_name = run_title + datetime.datetime.now().strftime("May_%d_%I_%M%p_GAN")
     writer = tf.summary.FileWriter('./tensorboard_logs/%s' % run_name, tf.get_default_graph())
@@ -195,7 +195,7 @@ def main():
                     [D_opt, G_opt, E_opt])
 
             if step % save_every == 0:
-                #saver.save(sess, 'saved/%s' % run_name, global_step=step)
+                saver.save(sess, 'saved/%s' % run_name, global_step=step)
                 pass
 
 

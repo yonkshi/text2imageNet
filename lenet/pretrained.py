@@ -10,7 +10,7 @@ from lenet.lib.utils.classes import get_word_list
 
 
 
-def generated_lenet(image):
+def generated_lenet(images):
     '''
     Loads pretrained GoogleLeNet model and ready to use
     :return: embed_op: output pipe for 1024 dim encoding
@@ -20,7 +20,7 @@ def generated_lenet(image):
     model = GoogleNet(is_load=True, pre_train_path='assets/lenet_pretrained.npy')
     image_placeholder = tf.placeholder(tf.float32, shape=[None, None, None, 3])
     word_dict = get_word_list('assets/lenet_labels.txt')
-    model.create_model([image_placeholder, 1])
+    model.create_model([images, 1])
     embed_op = model.layer['embedding']
 
     return embed_op, image_placeholder

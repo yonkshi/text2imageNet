@@ -1,4 +1,4 @@
-SIMPLE_RUN = False
+SIMPLE_RUN = True
 END_TO_END = True
 
 
