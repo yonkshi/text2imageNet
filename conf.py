@@ -1,4 +1,5 @@
 SIMPLE_RUN = False
+END_TO_END = True
 
 
 # Text encoder conf

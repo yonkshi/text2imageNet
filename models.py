@@ -4,9 +4,11 @@ from tensorflow.contrib import rnn
 import numpy as np
 import conf
 
-def build_char_cnn_rnn(input_seqs):
+def text_encoder(input_seqs, reuse=None):
+    if reuse is None:
+        reuse = tf.AUTO_REUSE
 
-    with tf.variable_scope("txt_encode", reuse=tf.AUTO_REUSE):
+    with tf.variable_scope("txt_encode", reuse=reuse):
         cnn_dim = 256 # dont know?
         embed_dim = 1024
         alphasize = 70 # like in paper?
