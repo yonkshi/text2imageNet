@@ -44,7 +44,7 @@ Discrimator (also step 3) loss:
 
 # Dataset
 * Images: Oxford-102 http://www.robots.ox.ac.uk/~vgg/data/flowers/102/
-* Image descreiption: Oxford-102 description https://github.com/reedscot/cvpr2016 (see link in README)
+* Image description: Oxford-102 description https://github.com/reedscot/cvpr2016 (see link in README)
 
 # Pretrained models
 Please PM me 
